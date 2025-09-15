@@ -1,0 +1,17 @@
+{
+  "name": "ea-financial-monorepo",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "workspaces": {
+    "packages": [
+      "projects/consumer-accounts-internal-api",
+      "projects/consumer-accounts-internal-app"
+    ]
+  }
+}

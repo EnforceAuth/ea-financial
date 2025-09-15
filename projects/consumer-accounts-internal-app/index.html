@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EA Financial - Consumer Accounts Portal</title>
+    <meta name="description" content="EA Financial internal employee portal for consumer account management" />
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+          'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        background-color: #f5f5f5;
+      }
+
+      #root {
+        min-height: 100vh;
+      }
+
+      .loading {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        font-size: 18px;
+        color: #666;
+      }
+
+      /* Basic reset for consistent styling */
+      * {
+        box-sizing: border-box;
+      }
+
+      h1, h2, h3, h4, h5, h6 {
+        margin: 0;
+        margin-bottom: 0.5rem;
+      }
+
+      p {
+        margin: 0;
+        margin-bottom: 1rem;
+      }
+
+      button {
+        font-family: inherit;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div class="loading">Loading EA Financial Portal...</div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
