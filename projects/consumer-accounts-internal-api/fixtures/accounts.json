@@ -1,0 +1,68 @@
+[
+  {
+    "id": "acc_001",
+    "customerId": "cust_001",
+    "accountNumber": "1234567890123456",
+    "accountType": "checking",
+    "balance": 2500.75,
+    "currency": "USD",
+    "status": "active",
+    "createdAt": "2024-01-15T10:30:00Z",
+    "updatedAt": "2024-01-20T14:45:00Z"
+  },
+  {
+    "id": "acc_002",
+    "customerId": "cust_001",
+    "accountNumber": "1234567890123457",
+    "accountType": "savings",
+    "balance": 15000.00,
+    "currency": "USD",
+    "status": "active",
+    "createdAt": "2024-01-10T09:15:00Z",
+    "updatedAt": "2024-01-18T11:20:00Z"
+  },
+  {
+    "id": "acc_003",
+    "customerId": "cust_002",
+    "accountNumber": "2345678901234567",
+    "accountType": "checking",
+    "balance": 750.25,
+    "currency": "USD",
+    "status": "active",
+    "createdAt": "2024-01-20T16:00:00Z",
+    "updatedAt": "2024-01-21T08:30:00Z"
+  },
+  {
+    "id": "acc_004",
+    "customerId": "cust_003",
+    "accountNumber": "3456789012345678",
+    "accountType": "checking",
+    "balance": 125.50,
+    "currency": "USD",
+    "status": "active",
+    "createdAt": "2024-01-05T14:20:00Z",
+    "updatedAt": "2024-01-22T09:15:00Z"
+  },
+  {
+    "id": "acc_005",
+    "customerId": "cust_002",
+    "accountNumber": "2345678901234568",
+    "accountType": "savings",
+    "balance": 5000.00,
+    "currency": "USD",
+    "status": "active",
+    "createdAt": "2024-01-12T11:45:00Z",
+    "updatedAt": "2024-01-19T15:30:00Z"
+  },
+  {
+    "id": "acc_006",
+    "customerId": "cust_004",
+    "accountNumber": "4567890123456789",
+    "accountType": "checking",
+    "balance": 0.00,
+    "currency": "USD",
+    "status": "frozen",
+    "createdAt": "2024-01-08T13:10:00Z",
+    "updatedAt": "2024-01-21T10:00:00Z"
+  }
+]

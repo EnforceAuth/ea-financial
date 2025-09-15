@@ -1,0 +1,130 @@
+{
+  "general_terms": {
+    "version": "2024.1",
+    "effective_date": "2024-01-01T00:00:00Z",
+    "last_updated": "2024-01-15T10:00:00Z",
+    "sections": {
+      "account_policies": {
+        "minimum_balance": {
+          "checking": 25.00,
+          "savings": 100.00
+        },
+        "monthly_fees": {
+          "checking": 12.00,
+          "savings": 0.00
+        },
+        "overdraft_fees": {
+          "fee_amount": 35.00,
+          "daily_maximum": 6,
+          "grace_period_hours": 24
+        },
+        "account_closure": {
+          "notice_period_days": 30,
+          "final_statement_delivery": "mail_and_electronic"
+        }
+      },
+      "transaction_limits": {
+        "daily_atm_withdrawal": 500.00,
+        "daily_debit_card": 2500.00,
+        "monthly_savings_withdrawals": 6,
+        "wire_transfer_daily": 10000.00,
+        "mobile_deposit_daily": 5000.00
+      },
+      "interest_rates": {
+        "savings_apy": 0.45,
+        "checking_apy": 0.01,
+        "overdraft_apr": 29.99,
+        "compounding_frequency": "monthly"
+      },
+      "security_policies": {
+        "password_requirements": {
+          "minimum_length": 12,
+          "require_uppercase": true,
+          "require_lowercase": true,
+          "require_numbers": true,
+          "require_special_chars": true,
+          "expiration_days": 90
+        },
+        "login_security": {
+          "max_failed_attempts": 3,
+          "lockout_duration_minutes": 30,
+          "session_timeout_minutes": 15,
+          "require_2fa": true
+        },
+        "fraud_monitoring": {
+          "enabled": true,
+          "unusual_activity_threshold": 1000.00,
+          "geographic_monitoring": true,
+          "velocity_checking": true
+        }
+      },
+      "compliance": {
+        "fdic_insured": true,
+        "fdic_insurance_limit": 250000.00,
+        "regulation_e_enabled": true,
+        "regulation_d_enabled": true,
+        "privacy_policy_version": "2024.1",
+        "data_retention_years": 7
+      }
+    }
+  },
+  "employee_procedures": {
+    "version": "2024.1",
+    "last_updated": "2024-01-10T14:30:00Z",
+    "sections": {
+      "account_access": {
+        "permissions_required": [
+          "view_accounts",
+          "view_transactions"
+        ],
+        "logging_required": true,
+        "supervisor_notification": {
+          "large_transactions": 10000.00,
+          "account_modifications": true,
+          "fraud_flags": true
+        }
+      },
+      "transaction_processing": {
+        "manual_override_limit": 1000.00,
+        "dual_approval_required": 5000.00,
+        "documentation_required": true,
+        "audit_trail_retention_days": 2555
+      },
+      "customer_service": {
+        "identity_verification_required": true,
+        "call_recording_enabled": true,
+        "escalation_thresholds": {
+          "complaint_resolution_hours": 24,
+          "manager_escalation_amount": 2500.00
+        }
+      },
+      "emergency_procedures": {
+        "account_freeze_authority": ["manager", "senior_representative"],
+        "after_hours_contact": "+1-800-555-BANK",
+        "fraud_hotline": "+1-800-555-FRAUD",
+        "system_outage_protocol": "manual_backup_system"
+      }
+    }
+  },
+  "regulatory_disclosures": {
+    "truth_in_savings": {
+      "annual_percentage_yield_calculation": "365_day_basis",
+      "minimum_balance_disclosure": "Fees may apply if balance falls below minimum",
+      "rate_change_notification": "30_days_advance_notice"
+    },
+    "electronic_fund_transfers": {
+      "regulation_e_rights": "Consumer rights under Regulation E apply",
+      "error_resolution_timeframe": "60_days_from_statement",
+      "liability_limits": {
+        "reported_within_2_days": 50.00,
+        "reported_within_60_days": 500.00,
+        "reported_after_60_days": "unlimited"
+      }
+    },
+    "privacy_notice": {
+      "information_sharing": "limited_to_affiliates_and_service_providers",
+      "opt_out_available": true,
+      "contact_for_questions": "privacy@eafinancial.com"
+    }
+  }
+}

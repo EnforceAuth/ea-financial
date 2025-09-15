@@ -1,0 +1,58 @@
+[
+  {
+    "id": "cust_001",
+    "employeeId": "emp_12345",
+    "username": "jsmith",
+    "email": "john.smith@eafinancial.com",
+    "firstName": "John",
+    "lastName": "Smith",
+    "department": "Customer Service",
+    "role": "senior_representative",
+    "permissions": ["view_accounts", "view_transactions", "basic_operations"],
+    "isActive": true,
+    "lastLogin": "2024-01-22T09:30:00Z",
+    "createdAt": "2024-01-01T00:00:00Z"
+  },
+  {
+    "id": "cust_002",
+    "employeeId": "emp_67890",
+    "username": "mjohnson",
+    "email": "mary.johnson@eafinancial.com",
+    "firstName": "Mary",
+    "lastName": "Johnson",
+    "department": "Operations",
+    "role": "manager",
+    "permissions": ["view_accounts", "view_transactions", "basic_operations", "advanced_operations", "account_management"],
+    "isActive": true,
+    "lastLogin": "2024-01-22T08:15:00Z",
+    "createdAt": "2024-01-01T00:00:00Z"
+  },
+  {
+    "id": "cust_003",
+    "employeeId": "emp_11111",
+    "username": "rbrown",
+    "email": "robert.brown@eafinancial.com",
+    "firstName": "Robert",
+    "lastName": "Brown",
+    "department": "Customer Service",
+    "role": "representative",
+    "permissions": ["view_accounts", "view_transactions"],
+    "isActive": true,
+    "lastLogin": "2024-01-21T16:45:00Z",
+    "createdAt": "2024-01-05T00:00:00Z"
+  },
+  {
+    "id": "cust_004",
+    "employeeId": "emp_22222",
+    "username": "slee",
+    "email": "sarah.lee@eafinancial.com",
+    "firstName": "Sarah",
+    "lastName": "Lee",
+    "department": "Risk Management",
+    "role": "analyst",
+    "permissions": ["view_accounts", "view_transactions", "basic_operations", "risk_analysis"],
+    "isActive": false,
+    "lastLogin": "2024-01-15T12:30:00Z",
+    "createdAt": "2024-01-03T00:00:00Z"
+  }
+]
