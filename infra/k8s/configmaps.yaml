@@ -1,0 +1,414 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opa-policies
+  labels:
+    app: opa
+    component: policy
+data:
+  authz.rego: |
+    package main
+
+    import rego.v1
+
+    # Default deny
+    default allow := false
+
+    # Allow health checks
+    allow if {
+        input.request.http.method == "GET"
+        input.request.http.path == "/health"
+    }
+
+    # Allow status checks
+    allow if {
+        input.request.http.method == "GET"
+        input.request.http.path == "/status"
+    }
+
+    # Allow root endpoint access
+    allow if {
+        input.request.http.method == "GET"
+        input.request.http.path == "/"
+    }
+
+    # Allow OPTIONS requests (CORS preflight)
+    allow if {
+        input.request.http.method == "OPTIONS"
+    }
+
+    # Main authorization logic
+    allow if {
+        # Extract JWT token from Authorization header
+        token := extract_token
+
+        # Verify token is valid
+        valid_token(token)
+
+        # Get user claims from token
+        claims := get_claims(token)
+
+        # Check if user is active
+        user_active(claims)
+
+        # Check permission for the specific operation
+        has_permission(claims, input.request)
+    }
+
+    # Extract bearer token from authorization header
+    extract_token := token if {
+        auth_header := input.request.http.headers.authorization
+        startswith(auth_header, "Bearer ")
+        token := substring(auth_header, 7, -1)
+    }
+
+    # Validate JWT token (simplified - in production use proper JWT validation)
+    valid_token(token) if {
+        # Basic token format validation
+        count(split(token, ".")) == 3
+
+        # Check token is not expired (mock validation)
+        token != ""
+    }
+
+    # Extract claims from JWT token (mock implementation)
+    get_claims(token) := claims if {
+        # In production, properly decode and verify JWT
+        # This is a mock implementation for demo purposes
+        users := data.ea_financial.users
+
+        # For demo, extract username from a simple token format
+        # In production, decode the JWT properly
+        parts := split(token, ".")
+
+        # Mock: use token as username lookup for demo
+        some username, user in users
+        user.token == token
+
+        claims := {
+            "sub": username,
+            "role": user.role,
+            "permissions": user.permissions,
+            "department": user.department,
+            "active": user.active,
+            "exp": user.exp
+        }
+    }
+
+    # Check if user is active
+    user_active(claims) if {
+        claims.active == true
+    }
+
+    # Permission checking logic
+    has_permission(claims, request) if {
+        method := request.http.method
+        path := request.http.path
+
+        # Extract resource and action
+        resource := extract_resource(path)
+        action := method_to_action(method)
+
+        # Check if user has required permission
+        required_permission := sprintf("%s:%s", [resource, action])
+        required_permission in claims.permissions
+    }
+
+    # Extract resource from path
+    extract_resource(path) := resource if {
+        path_parts := split(trim(path, "/"), "/")
+
+        # Route-based resource mapping
+        resource := route_to_resource(path_parts)
+    }
+
+    # Map routes to resources
+    route_to_resource(parts) := "auth" if {
+        parts[0] == "auth"
+    }
+
+    route_to_resource(parts) := "accounts" if {
+        parts[0] == "accounts"
+    }
+
+    route_to_resource(parts) := "terms" if {
+        parts[0] == "terms"
+    }
+
+    route_to_resource(parts) := "transactions" if {
+        parts[0] == "accounts"
+        count(parts) >= 3
+        parts[2] == "transactions"
+    }
+
+    route_to_resource(parts) := "balance" if {
+        parts[0] == "accounts"
+        count(parts) >= 3
+        parts[2] == "balance"
+    }
+
+    route_to_resource(parts) := "debit" if {
+        parts[0] == "accounts"
+        count(parts) >= 3
+        parts[2] == "debit"
+    }
+
+    route_to_resource(parts) := "credit" if {
+        parts[0] == "accounts"
+        count(parts) >= 3
+        parts[2] == "credit"
+    }
+
+    # Default to general API resource
+    route_to_resource(parts) := "api" if {
+        true
+    }
+
+    # Map HTTP methods to actions
+    method_to_action("GET") := "read"
+    method_to_action("POST") := "create"
+    method_to_action("PUT") := "update"
+    method_to_action("DELETE") := "delete"
+    method_to_action("PATCH") := "update"
+
+    # Role-based access control
+    allow if {
+        token := extract_token
+        valid_token(token)
+        claims := get_claims(token)
+        user_active(claims)
+
+        # Managers can access everything
+        claims.role == "manager"
+    }
+
+    # Senior representatives have elevated access
+    allow if {
+        token := extract_token
+        valid_token(token)
+        claims := get_claims(token)
+        user_active(claims)
+        claims.role == "senior_representative"
+
+        # Allow most operations except sensitive admin functions
+        not is_admin_operation(input.request)
+    }
+
+    # Check if operation requires admin privileges
+    is_admin_operation(request) if {
+        request.http.method == "DELETE"
+    }
+
+    is_admin_operation(request) if {
+        contains(request.http.path, "/admin")
+    }
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opa-data
+  labels:
+    app: opa
+    component: data
+data:
+  users.json: |
+    {
+      "users": {
+          "jsmith": {
+            "role": "senior_representative",
+            "permissions": [
+              "accounts:read",
+              "accounts:update",
+              "balance:read",
+              "transactions:read",
+              "transactions:create",
+              "credit:create",
+              "debit:create",
+              "terms:read",
+              "auth:create"
+            ],
+            "department": "customer_service",
+            "active": true,
+            "token": "jsmith_token_123",
+            "exp": 1735689600,
+            "assigned_accounts": ["ACC001", "ACC002", "ACC003", "ACC004", "ACC005"]
+          },
+          "mjohnson": {
+            "role": "manager",
+            "permissions": [
+              "accounts:read",
+              "accounts:update",
+              "accounts:create",
+              "accounts:delete",
+              "balance:read",
+              "transactions:read",
+              "transactions:create",
+              "transactions:update",
+              "transactions:delete",
+              "credit:create",
+              "debit:create",
+              "terms:read",
+              "terms:update",
+              "auth:create",
+              "admin:read",
+              "admin:update"
+            ],
+            "department": "management",
+            "active": true,
+            "token": "mjohnson_token_456",
+            "exp": 1735689600,
+            "assigned_accounts": ["*"]
+          },
+          "rbrown": {
+            "role": "representative",
+            "permissions": [
+              "accounts:read",
+              "balance:read",
+              "transactions:read",
+              "terms:read",
+              "auth:create"
+            ],
+            "department": "customer_service",
+            "active": true,
+            "token": "rbrown_token_789",
+            "exp": 1735689600,
+            "assigned_accounts": ["ACC001", "ACC002", "ACC003"]
+          },
+          "slee": {
+            "role": "analyst",
+            "permissions": [
+              "accounts:read",
+              "balance:read",
+              "transactions:read",
+              "terms:read"
+            ],
+            "department": "analytics",
+            "active": false,
+            "token": "slee_token_000",
+            "exp": 1735689600,
+            "assigned_accounts": []
+          }
+      },
+      "user_accounts": {
+          "jsmith": ["ACC001", "ACC002", "ACC003", "ACC004", "ACC005"],
+          "mjohnson": ["ACC001", "ACC002", "ACC003", "ACC004", "ACC005", "ACC006", "ACC007", "ACC008", "ACC009", "ACC010"],
+          "rbrown": ["ACC001", "ACC002", "ACC003"],
+          "slee": []
+      },
+      "roles": {
+          "manager": {
+            "level": 4,
+            "description": "Full access to all banking operations and administrative functions"
+          },
+          "senior_representative": {
+            "level": 3,
+            "description": "Enhanced customer service representative with transaction privileges"
+          },
+          "representative": {
+            "level": 2,
+            "description": "Standard customer service representative with read access"
+          },
+          "analyst": {
+            "level": 1,
+            "description": "Analytics role with limited read-only access"
+          }
+      },
+      "departments": {
+          "management": {
+            "access_level": "full",
+            "business_hours": {
+              "start": 0,
+              "end": 24
+            }
+          },
+          "customer_service": {
+            "access_level": "standard",
+            "business_hours": {
+              "start": 6,
+              "end": 22
+            }
+          },
+          "analytics": {
+            "access_level": "readonly",
+            "business_hours": {
+              "start": 8,
+              "end": 18
+            }
+          }
+      }
+    }
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opa-config
+  labels:
+    app: opa
+    component: config
+data:
+  opa-config.yaml: |
+    services:
+      authz:
+        url: http://localhost:8181
+
+    plugins:
+      envoy_ext_authz_grpc:
+        addr: :9191
+        query: data.main.allow
+
+    decision_logs:
+      console: true
+      reporting:
+        min_delay_seconds: 5
+        max_delay_seconds: 10
+
+    status:
+      console: true
+      prometheus: true
+
+    server:
+      encoding:
+        gzip:
+          min_length: 1024
+
+    bundles:
+      authz:
+        resource: "/policies"
+        service: "authz"
+        polling:
+          min_delay_seconds: 10
+          max_delay_seconds: 20
+
+    discovery:
+      resource: "/config"
+      service: "authz"
+
+    # Enable distributed tracing
+    distributed_tracing:
+      type: http
+      address: http://jaeger:14268/api/traces
+
+    # Configure metrics
+    metrics:
+      prometheus:
+        http_request_duration_seconds:
+          buckets:
+            - 0.005
+            - 0.01
+            - 0.025
+            - 0.05
+            - 0.1
+            - 0.25
+            - 0.5
+            - 1
+            - 2.5
+            - 5
+            - 10
+
+    # Default decision
+    default_decision: "/v1/data/ea_financial/authz/allow"
+
+    # Default authorization query
+    default_authorization_decision: "/v1/data/ea_financial/authz/allow"

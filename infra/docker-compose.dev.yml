@@ -1,0 +1,323 @@
+version: "3.8"
+
+services:
+  # EOPA Service
+  opa:
+    image: ghcr.io/open-policy-agent/eopa:latest
+    container_name: ea-financial-eopa
+    ports:
+      - "8181:8181"
+      - "9191:9191"
+    volumes:
+      - ./opa/policies:/policies
+      - ./opa/data:/data
+      - ./opa/config:/config
+    command:
+      - "run"
+      - "--server"
+      - "--addr=0.0.0.0:8181"
+      - "--config-file=/config/opa-config.yaml"
+      - "--log-level=info"
+      - "--log-format=json"
+      - "/policies"
+      - "/data"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8181/health",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - ea-financial-network
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.opa.rule=Host(`eopa.ea-financial.local`)"
+      - "traefik.http.services.opa.loadbalancer.server.port=8181"
+
+  # API Service
+  consumer-accounts-api:
+    build:
+      context: ../projects/consumer-accounts-internal-api
+      dockerfile: Dockerfile
+    container_name: ea-financial-api
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - OPA_URL=http://opa:8181
+      - LOG_LEVEL=info
+      - CORS_ORIGIN=http://localhost:3000
+    depends_on:
+      opa:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - ea-financial-network
+    restart: unless-stopped
+    volumes:
+      # Enable hot reload for development
+      - ../projects/consumer-accounts-internal-api/src:/app/src:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`api.ea-financial.local`)"
+      - "traefik.http.services.api.loadbalancer.server.port=3001"
+      - "traefik.http.routers.api.middlewares=cors"
+      - "traefik.http.middlewares.cors.headers.accesscontrolallowmethods=GET,OPTIONS,PUT,POST,DELETE"
+      - "traefik.http.middlewares.cors.headers.accesscontrolalloworiginlist=*"
+      - "traefik.http.middlewares.cors.headers.accesscontrolmaxage=100"
+      - "traefik.http.middlewares.cors.headers.addvaryheader=true"
+
+  # Frontend App Service
+  consumer-accounts-app:
+    build:
+      context: ../projects/consumer-accounts-internal-app
+      dockerfile: Dockerfile.dev
+      args:
+        - REACT_APP_API_URL=http://consumer-accounts-api:3001
+    container_name: ea-financial-app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - REACT_APP_API_URL=http://localhost:3001
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    depends_on:
+      consumer-accounts-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - ea-financial-network
+    restart: unless-stopped
+    volumes:
+      # Enable hot reload for development
+      - ../projects/consumer-accounts-internal-app/src:/app/src:ro
+      - ../projects/consumer-accounts-internal-app/public:/app/public:ro
+      - /app/node_modules
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.app.rule=Host(`ea-financial.local`)"
+      - "traefik.http.services.app.loadbalancer.server.port=3000"
+
+  # Reverse Proxy / Load Balancer
+  traefik:
+    image: traefik:v3.0
+    container_name: ea-financial-traefik
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080" # Traefik dashboard
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.email=admin@ea-financial.local"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--log.level=INFO"
+      - "--accesslog=true"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./certs:/letsencrypt"
+    networks:
+      - ea-financial-network
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.ea-financial.local`)"
+      - "traefik.http.services.traefik.loadbalancer.server.port=8080"
+
+  # Redis for session storage and caching
+  redis:
+    image: redis:7-alpine
+    container_name: ea-financial-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - ea-financial-network
+    restart: unless-stopped
+
+  # PostgreSQL for data persistence (optional)
+  postgres:
+    image: postgres:15-alpine
+    container_name: ea-financial-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=ea_financial
+      - POSTGRES_USER=ea_financial_user
+      - POSTGRES_PASSWORD=ea_financial_password
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ea_financial_user -d ea_financial"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - ea-financial-network
+    restart: unless-stopped
+
+  # Monitoring - Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ea-financial-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--storage.tsdb.retention.time=200h"
+      - "--web.enable-lifecycle"
+      - "--web.enable-admin-api"
+    networks:
+      - ea-financial-network
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.ea-financial.local`)"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+
+  # Monitoring - Grafana
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ea-financial-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - prometheus
+    networks:
+      - ea-financial-network
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.ea-financial.local`)"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+
+  # Log aggregation - Loki
+  loki:
+    image: grafana/loki:latest
+    container_name: ea-financial-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./monitoring/loki/loki.yml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - ea-financial-network
+    restart: unless-stopped
+
+  # Log collection - Promtail
+  promtail:
+    image: grafana/promtail:latest
+    container_name: ea-financial-promtail
+    volumes:
+      - ./monitoring/promtail/promtail.yml:/etc/promtail/config.yml:ro
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    networks:
+      - ea-financial-network
+    restart: unless-stopped
+
+networks:
+  ea-financial-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+    labels:
+      - "traefik.enable=false"
+
+volumes:
+  redis-data:
+    driver: local
+    labels:
+      - "backup.enabled=true"
+  postgres-data:
+    driver: local
+    labels:
+      - "backup.enabled=true"
+  prometheus-data:
+    driver: local
+    labels:
+      - "backup.enabled=true"
+  grafana-data:
+    driver: local
+    labels:
+      - "backup.enabled=true"
+  loki-data:
+    driver: local
+    labels:
+      - "backup.enabled=true"
+
+# Health check configuration
+x-healthcheck-config: &healthcheck-config
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 40s
+
+# Logging configuration
+x-logging-config: &logging-config
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+    labels: "service,environment"
+# Apply logging to all services
+# Note: Logging configuration should be added to individual services in the main services section above

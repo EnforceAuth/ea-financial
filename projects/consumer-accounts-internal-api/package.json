@@ -25,11 +25,11 @@
   "author": "EA Financial Engineering Team",
   "license": "PRIVATE",
   "dependencies": {
-    "elysia": "latest"
+    "elysia": "1.4.5"
   },
   "devDependencies": {
-    "bun-types": "latest",
-    "@types/node": "^20.0.0"
+    "bun-types": "1.2.22",
+    "@types/node": "24.4.0"
   },
   "engines": {
     "node": ">=18.0.0",

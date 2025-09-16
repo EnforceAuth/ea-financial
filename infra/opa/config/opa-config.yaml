@@ -1,0 +1,63 @@
+services:
+  authz:
+    url: http://localhost:8181
+
+plugins:
+  envoy_ext_authz_grpc:
+    addr: :9191
+    query: data.envoy.authz.allow
+
+decision_logs:
+  console: true
+  reporting:
+    min_delay_seconds: 5
+    max_delay_seconds: 10
+
+status:
+  console: true
+  prometheus: true
+
+server:
+  encoding:
+    gzip:
+      min_length: 1024
+
+bundles:
+  authz:
+    resource: "/policies"
+    service: "authz"
+    polling:
+      min_delay_seconds: 10
+      max_delay_seconds: 20
+
+discovery:
+  resource: "/config"
+  service: "authz"
+
+# Enable distributed tracing
+distributed_tracing:
+  type: http
+  address: http://jaeger:14268/api/traces
+
+# Configure metrics
+metrics:
+  prometheus:
+    http_request_duration_seconds:
+      buckets:
+        - 0.005
+        - 0.01
+        - 0.025
+        - 0.05
+        - 0.1
+        - 0.25
+        - 0.5
+        - 1
+        - 2.5
+        - 5
+        - 10
+
+# Default decision
+default_decision: "/v1/data/ea_financial/authz/allow"
+
+# Default authorization query
+default_authorization_decision: "/v1/data/ea_financial/authz/allow"
