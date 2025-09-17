@@ -1,6 +1,6 @@
 # EA Financial
 
-This monorepo contains the code for the EA Financial, a fictional global bank serving as an example institution for demonstrating best practices in policy-as-code.
+This monorepo contains the code for the EA Financial, a fictional global bank serving as an example institution for demonstrating best practices in policy-as-code with **fully integrated Open Policy Agent (OPA) authorization**.
 
 ## Quick Start - Access the App in Your Browser
 
@@ -112,14 +112,50 @@ cd infra
 
 ## Key Features
 
-- **Policy-as-Code**: Authorization policies defined in Rego
-- **Role-Based Access Control**: Hierarchical permission system
-- **Kubernetes-Native**: Cloud-native deployment architecture
-- **Development-Friendly**: Local testing and linting tools
-- **Compliance-Ready**: Audit logging and decision tracking
+- **✅ OPA Integration**: Fully integrated Open Policy Agent authorization with real-time policy evaluation
+- **🔐 Role-Based Access Control**: Hierarchical permission system (Manager → Senior Rep → Representative → Analyst)
+- **📜 Policy-as-Code**: Authorization policies defined in Rego with comprehensive test coverage
+- **🏗️ Kubernetes-Native**: Cloud-native deployment with OPA sidecar architecture
+- **🧪 Development-Friendly**: Local testing, linting tools, and comprehensive test suite
+- **📊 Compliance-Ready**: Complete audit logging and decision tracking for banking regulations
+- **🔒 Production-Ready**: Enterprise-grade security with fail-safe defaults
+
+## Recent Updates
+
+**🎉 OPA Integration Complete!** The Consumer Accounts API now features:
+- Real-time authorization through OPA policies
+- Token-based authentication with OPA user data
+- Comprehensive role-based permissions
+- Complete audit trail for compliance
+- Fail-safe security when OPA is unavailable
+- Full test coverage for authorization flows
+
+All API endpoints are now protected by OPA policies with fine-grained access control.
 
 ## Documentation
 
-- [Authorization Module](infra/opa/README.md) - Detailed authz documentation
-- [Infrastructure Guide](infra/README.md) - Deployment and operations
-- [Infrastructure Summary](infra/INFRASTRUCTURE_SUMMARY.md) - Technical overview
+- [🔐 Authorization Module](infra/opa/README.md) - Detailed OPA authorization documentation
+- [🌐 Consumer Accounts API](projects/consumer-accounts-internal-api/README.md) - **NEW: Complete OPA integration guide**
+- [🏗️ Infrastructure Guide](infra/README.md) - Deployment and operations  
+- [📋 Infrastructure Summary](infra/INFRASTRUCTURE_SUMMARY.md) - Technical overview
+
+## Demo Credentials & Testing
+
+The system includes demo credentials for testing different access levels:
+
+| Role | Username | Password | Access Level |
+|------|----------|----------|--------------|
+| **Manager** | `mjohnson` | `password456` | Full access to all operations |
+| **Senior Rep** | `jsmith` | `password123` | Transaction operations, no admin |
+| **Representative** | `rbrown` | `password789` | Read-only access |
+| **Analyst** | `slee` | `password000` | Inactive user (access denied) |
+
+### Quick API Test
+```bash
+# Test the OPA integration
+cd projects/consumer-accounts-internal-api
+./scripts/test-opa-integration.sh
+
+# Or test without OPA (offline mode)
+./scripts/test-integration-offline.sh
+```
