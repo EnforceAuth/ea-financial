@@ -1,9 +1,9 @@
-import type React from 'react';
-import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth, usePermissions } from '@/context/AuthContext';
-import { apiService } from '@/services/api';
-import { PERMISSIONS } from '@/types';
+import type React from "react";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth, usePermissions } from "@/context/AuthContext";
+import { apiService } from "@/services/api";
+import { PERMISSIONS } from "@/types";
 
 interface QuickStats {
   totalAccounts: number;
@@ -28,7 +28,7 @@ const Dashboard: React.FC = () => {
   const { hasPermission } = usePermissions();
   const navigate = useNavigate();
 
-  const [accountSearch, setAccountSearch] = useState('');
+  const [accountSearch, setAccountSearch] = useState("");
   const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
   const [quickStats] = useState<QuickStats>({
     totalAccounts: 150,
@@ -50,7 +50,9 @@ const Dashboard: React.FC = () => {
         lastChecked: status.timestamp,
         services: status.services,
       });
-    } catch (_error) {}
+    } catch (_error) {
+      // Failed to load system health - continuing without health status
+    }
   };
 
   const handleAccountSearch = (e: React.FormEvent) => {
@@ -62,14 +64,14 @@ const Dashboard: React.FC = () => {
 
   const formatRole = (role: string) => {
     switch (role) {
-      case 'senior_representative':
-        return 'Senior Representative';
-      case 'representative':
-        return 'Representative';
-      case 'manager':
-        return 'Manager';
-      case 'analyst':
-        return 'Analyst';
+      case "senior_representative":
+        return "Senior Representative";
+      case "representative":
+        return "Representative";
+      case "manager":
+        return "Manager";
+      case "analyst":
+        return "Analyst";
       default:
         return role;
     }
@@ -78,57 +80,57 @@ const Dashboard: React.FC = () => {
   const getWelcomeMessage = () => {
     const hour = new Date().getHours();
     if (hour < 12) {
-      return 'Good morning';
+      return "Good morning";
     }
     if (hour < 17) {
-      return 'Good afternoon';
+      return "Good afternoon";
     }
-    return 'Good evening';
+    return "Good evening";
   };
 
   const getServiceStatusIcon = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'operational':
-        return '🟢';
-      case 'degraded':
-        return '🟡';
-      case 'down':
-        return '🔴';
+      case "operational":
+        return "🟢";
+      case "degraded":
+        return "🟡";
+      case "down":
+        return "🔴";
       default:
-        return '⚪';
+        return "⚪";
     }
   };
 
   const quickActions = [
     {
-      title: 'Account Lookup',
-      description: 'Search and view account details',
-      icon: '🔍',
-      action: () => navigate('/accounts/search'),
+      title: "Account Lookup",
+      description: "Search and view account details",
+      icon: "🔍",
+      action: () => navigate("/accounts/search"),
       permission: PERMISSIONS.VIEW_ACCOUNTS,
       primary: true,
     },
     {
-      title: 'Process Transaction',
-      description: 'Credit or debit customer accounts',
-      icon: '💰',
-      action: () => navigate('/accounts/search?action=transaction'),
+      title: "Process Transaction",
+      description: "Credit or debit customer accounts",
+      icon: "💰",
+      action: () => navigate("/accounts/search?action=transaction"),
       permission: PERMISSIONS.BASIC_OPERATIONS,
       primary: true,
     },
     {
-      title: 'View Terms',
-      description: 'Access banking policies and procedures',
-      icon: '📋',
-      action: () => navigate('/terms'),
+      title: "View Terms",
+      description: "Access banking policies and procedures",
+      icon: "📋",
+      action: () => navigate("/terms"),
       permission: null,
       primary: false,
     },
     {
-      title: 'Transaction History',
-      description: 'Review recent account activity',
-      icon: '📊',
-      action: () => navigate('/accounts/search?action=history'),
+      title: "Transaction History",
+      description: "Review recent account activity",
+      icon: "📊",
+      action: () => navigate("/accounts/search?action=history"),
       permission: PERMISSIONS.VIEW_TRANSACTIONS,
       primary: false,
     },
@@ -142,8 +144,8 @@ const Dashboard: React.FC = () => {
             {getWelcomeMessage()}, {user?.username}!
           </h1>
           <p>
-            Welcome to the EA Financial Employee Portal. You are logged in as a{' '}
-            <span className="user-role">{formatRole(user?.role || '')}</span>.
+            Welcome to the EA Financial Employee Portal. You are logged in as a{" "}
+            <span className="user-role">{formatRole(user?.role || "")}</span>.
           </p>
         </div>
 
@@ -154,14 +156,17 @@ const Dashboard: React.FC = () => {
                 type="text"
                 placeholder="Enter Account ID or Number"
                 value={accountSearch}
-                onChange={e => setAccountSearch(e.target.value)}
+                onChange={(e) => setAccountSearch(e.target.value)}
                 className="search-input"
                 disabled={!hasPermission(PERMISSIONS.VIEW_ACCOUNTS)}
               />
               <button
                 type="submit"
                 className="search-button"
-                disabled={!accountSearch.trim() || !hasPermission(PERMISSIONS.VIEW_ACCOUNTS)}
+                disabled={
+                  !accountSearch.trim() ||
+                  !hasPermission(PERMISSIONS.VIEW_ACCOUNTS)
+                }
               >
                 🔍 Search
               </button>
@@ -197,7 +202,9 @@ const Dashboard: React.FC = () => {
                   <div className="stat-card">
                     <div className="stat-icon">💸</div>
                     <div className="stat-content">
-                      <div className="stat-value">{quickStats.todayTransactions}</div>
+                      <div className="stat-value">
+                        {quickStats.todayTransactions}
+                      </div>
                       <div className="stat-label">Today's Transactions</div>
                     </div>
                   </div>
@@ -205,7 +212,9 @@ const Dashboard: React.FC = () => {
                   <div className="stat-card">
                     <div className="stat-icon">⏳</div>
                     <div className="stat-content">
-                      <div className="stat-value">{quickStats.pendingTransactions}</div>
+                      <div className="stat-value">
+                        {quickStats.pendingTransactions}
+                      </div>
                       <div className="stat-label">Pending Reviews</div>
                     </div>
                   </div>
@@ -219,17 +228,22 @@ const Dashboard: React.FC = () => {
             <h2>Quick Actions</h2>
             <div className="actions-grid">
               {quickActions
-                .filter(action => !action.permission || hasPermission(action.permission))
+                .filter(
+                  (action) =>
+                    !action.permission || hasPermission(action.permission),
+                )
                 .map((action, index) => (
                   <button
                     key={index}
-                    className={`action-card ${action.primary ? 'primary' : ''}`}
+                    className={`action-card ${action.primary ? "primary" : ""}`}
                     onClick={action.action}
                   >
                     <div className="action-icon">{action.icon}</div>
                     <div className="action-content">
                       <div className="action-title">{action.title}</div>
-                      <div className="action-description">{action.description}</div>
+                      <div className="action-description">
+                        {action.description}
+                      </div>
                     </div>
                   </button>
                 ))}
@@ -243,17 +257,18 @@ const Dashboard: React.FC = () => {
               <div className="health-header">
                 <div className="health-status">
                   <span className="status-icon">
-                    {systemHealth?.status === 'operational' ? '🟢' : '🟡'}
+                    {systemHealth?.status === "operational" ? "🟢" : "🟡"}
                   </span>
                   <span className="status-text">
-                    {systemHealth?.status === 'operational'
-                      ? 'All Systems Operational'
-                      : 'Checking Status...'}
+                    {systemHealth?.status === "operational"
+                      ? "All Systems Operational"
+                      : "Checking Status..."}
                   </span>
                 </div>
                 {systemHealth && (
                   <div className="health-timestamp">
-                    Last checked: {new Date(systemHealth.lastChecked).toLocaleTimeString()}
+                    Last checked:{" "}
+                    {new Date(systemHealth.lastChecked).toLocaleTimeString()}
                   </div>
                 )}
               </div>
@@ -262,10 +277,14 @@ const Dashboard: React.FC = () => {
                 <div className="services-status">
                   <div className="service-item">
                     <span className="service-icon">
-                      {getServiceStatusIcon(systemHealth.services.authentication)}
+                      {getServiceStatusIcon(
+                        systemHealth.services.authentication,
+                      )}
                     </span>
                     <span className="service-name">Authentication</span>
-                    <span className="service-status">{systemHealth.services.authentication}</span>
+                    <span className="service-status">
+                      {systemHealth.services.authentication}
+                    </span>
                   </div>
 
                   <div className="service-item">
@@ -273,7 +292,9 @@ const Dashboard: React.FC = () => {
                       {getServiceStatusIcon(systemHealth.services.accounts)}
                     </span>
                     <span className="service-name">Account Services</span>
-                    <span className="service-status">{systemHealth.services.accounts}</span>
+                    <span className="service-status">
+                      {systemHealth.services.accounts}
+                    </span>
                   </div>
 
                   <div className="service-item">
@@ -281,7 +302,9 @@ const Dashboard: React.FC = () => {
                       {getServiceStatusIcon(systemHealth.services.terms)}
                     </span>
                     <span className="service-name">Terms & Policies</span>
-                    <span className="service-status">{systemHealth.services.terms}</span>
+                    <span className="service-status">
+                      {systemHealth.services.terms}
+                    </span>
                   </div>
 
                   <div className="service-item">
@@ -289,7 +312,9 @@ const Dashboard: React.FC = () => {
                       {getServiceStatusIcon(systemHealth.services.database)}
                     </span>
                     <span className="service-name">Database</span>
-                    <span className="service-status">{systemHealth.services.database}</span>
+                    <span className="service-status">
+                      {systemHealth.services.database}
+                    </span>
                   </div>
                 </div>
               )}
@@ -305,24 +330,36 @@ const Dashboard: React.FC = () => {
                   <div className="activity-item">
                     <div className="activity-icon">💰</div>
                     <div className="activity-content">
-                      <div className="activity-title">Account Credit - $500.00</div>
-                      <div className="activity-details">Account: acc_001 • 2 minutes ago</div>
+                      <div className="activity-title">
+                        Account Credit - $500.00
+                      </div>
+                      <div className="activity-details">
+                        Account: acc_001 • 2 minutes ago
+                      </div>
                     </div>
                   </div>
 
                   <div className="activity-item">
                     <div className="activity-icon">🔍</div>
                     <div className="activity-content">
-                      <div className="activity-title">Account Balance Inquiry</div>
-                      <div className="activity-details">Account: acc_002 • 15 minutes ago</div>
+                      <div className="activity-title">
+                        Account Balance Inquiry
+                      </div>
+                      <div className="activity-details">
+                        Account: acc_002 • 15 minutes ago
+                      </div>
                     </div>
                   </div>
 
                   <div className="activity-item">
                     <div className="activity-icon">📊</div>
                     <div className="activity-content">
-                      <div className="activity-title">Transaction History Review</div>
-                      <div className="activity-details">Account: acc_003 • 1 hour ago</div>
+                      <div className="activity-title">
+                        Transaction History Review
+                      </div>
+                      <div className="activity-details">
+                        Account: acc_003 • 1 hour ago
+                      </div>
                     </div>
                   </div>
                 </div>

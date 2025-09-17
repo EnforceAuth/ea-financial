@@ -1,6 +1,6 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import type { Account, Transaction, User } from '../types';
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import type { Account, Transaction, User } from "../types";
 
 class DataService {
   private accounts: Account[] = [];
@@ -13,34 +13,43 @@ class DataService {
 
   private loadData() {
     try {
-      const fixturesPath = join(process.cwd(), 'fixtures');
+      const fixturesPath = join(process.cwd(), "fixtures");
 
-      this.accounts = JSON.parse(readFileSync(join(fixturesPath, 'accounts.json'), 'utf-8'));
+      this.accounts = JSON.parse(
+        readFileSync(join(fixturesPath, "accounts.json"), "utf-8"),
+      );
 
-      this.users = JSON.parse(readFileSync(join(fixturesPath, 'users.json'), 'utf-8'));
+      this.users = JSON.parse(
+        readFileSync(join(fixturesPath, "users.json"), "utf-8"),
+      );
 
       this.transactions = JSON.parse(
-        readFileSync(join(fixturesPath, 'transactions.json'), 'utf-8')
+        readFileSync(join(fixturesPath, "transactions.json"), "utf-8"),
       );
-    } catch (_error) {}
+    } catch (_error) {
+      // Fixtures not found - continue with empty data
+      console.log(
+        "Warning: Could not load fixture data, continuing with empty datasets",
+      );
+    }
   }
 
   // User operations
   getUserByUsername(username: string): User | undefined {
-    return this.users.find(user => user.username === username);
+    return this.users.find((user) => user.username === username);
   }
 
   getUserById(id: string): User | undefined {
-    return this.users.find(user => user.id === id);
+    return this.users.find((user) => user.id === id);
   }
 
   // Account operations
   getAccountById(accountId: string): Account | undefined {
-    return this.accounts.find(account => account.id === accountId);
+    return this.accounts.find((account) => account.id === accountId);
   }
 
   getAccountsByCustomerId(customerId: string): Account[] {
-    return this.accounts.filter(account => account.customerId === customerId);
+    return this.accounts.filter((account) => account.customerId === customerId);
   }
 
   updateAccountBalance(accountId: string, newBalance: number): boolean {
@@ -55,10 +64,17 @@ class DataService {
   }
 
   // Transaction operations
-  getTransactionsByAccountId(accountId: string, limit?: number, offset?: number): Transaction[] {
+  getTransactionsByAccountId(
+    accountId: string,
+    limit?: number,
+    offset?: number,
+  ): Transaction[] {
     let accountTransactions = this.transactions
-      .filter(txn => txn.accountId === accountId)
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      .filter((txn) => txn.accountId === accountId)
+      .sort(
+        (a, b) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+      );
 
     if (offset) {
       accountTransactions = accountTransactions.slice(offset);
@@ -71,12 +87,14 @@ class DataService {
     return accountTransactions;
   }
 
-  addTransaction(transaction: Omit<Transaction, 'id' | 'timestamp' | 'status'>): Transaction {
+  addTransaction(
+    transaction: Omit<Transaction, "id" | "timestamp" | "status">,
+  ): Transaction {
     const newTransaction: Transaction = {
       ...transaction,
       id: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       timestamp: new Date().toISOString(),
-      status: 'completed',
+      status: "completed",
     };
 
     this.transactions.unshift(newTransaction);
@@ -91,39 +109,44 @@ class DataService {
     const account = this.getAccountById(accountId);
 
     if (!account) {
-      return { valid: false, message: 'Account not found' };
+      return { valid: false, message: "Account not found" };
     }
 
-    if (account.status === 'frozen') {
-      return { valid: false, message: 'Account is frozen' };
+    if (account.status === "frozen") {
+      return { valid: false, message: "Account is frozen" };
     }
 
-    if (account.status === 'closed') {
-      return { valid: false, message: 'Account is closed' };
+    if (account.status === "closed") {
+      return { valid: false, message: "Account is closed" };
     }
 
-    return { valid: true, message: 'Account is valid' };
+    return { valid: true, message: "Account is valid" };
   }
 
-  validateSufficientFunds(accountId: string, amount: number): { valid: boolean; message: string } {
+  validateSufficientFunds(
+    accountId: string,
+    amount: number,
+  ): { valid: boolean; message: string } {
     const account = this.getAccountById(accountId);
 
     if (!account) {
-      return { valid: false, message: 'Account not found' };
+      return { valid: false, message: "Account not found" };
     }
 
     if (account.balance < amount) {
-      return { valid: false, message: 'Insufficient funds' };
+      return { valid: false, message: "Insufficient funds" };
     }
 
-    return { valid: true, message: 'Sufficient funds available' };
+    return { valid: true, message: "Sufficient funds available" };
   }
 
   // Terms data
   getTermsData(): Record<string, unknown> {
     try {
-      const fixturesPath = join(process.cwd(), 'fixtures');
-      return JSON.parse(readFileSync(join(fixturesPath, 'terms.json'), 'utf-8'));
+      const fixturesPath = join(process.cwd(), "fixtures");
+      return JSON.parse(
+        readFileSync(join(fixturesPath, "terms.json"), "utf-8"),
+      );
     } catch (_error) {
       return {};
     }

@@ -2,7 +2,7 @@
 export interface User {
   id: string;
   username: string;
-  role: 'representative' | 'senior_representative' | 'manager' | 'analyst';
+  role: "representative" | "senior_representative" | "manager" | "analyst";
   permissions: string[];
   isActive?: boolean;
 }
@@ -34,9 +34,9 @@ export interface Account {
   accountNumber: string;
   customerId: string;
   customerName: string;
-  accountType: 'checking' | 'savings' | 'credit' | 'loan';
+  accountType: "checking" | "savings" | "credit" | "loan";
   balance: number;
-  status: 'active' | 'inactive' | 'frozen' | 'closed';
+  status: "active" | "inactive" | "frozen" | "closed";
   openDate: string;
   lastActivity: string;
   interestRate?: number;
@@ -56,14 +56,14 @@ export interface AccountBalance {
 export interface Transaction {
   transactionId: string;
   accountId: string;
-  type: 'credit' | 'debit';
+  type: "credit" | "debit";
   amount: number;
   description: string;
   reference: string;
   employeeId: string;
   employeeName?: string;
   timestamp: string;
-  status: 'pending' | 'completed' | 'failed' | 'cancelled';
+  status: "pending" | "completed" | "failed" | "cancelled";
   balanceBefore: number;
   balanceAfter: number;
 }
@@ -104,7 +104,7 @@ export interface Terms {
 }
 
 // API Response Types
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   message: string;
   data?: T;
@@ -121,14 +121,14 @@ export interface ApiError {
 
 // Health and Status Types
 export interface HealthStatus {
-  status: 'healthy' | 'unhealthy';
+  status: "healthy" | "unhealthy";
   timestamp: string;
   service: string;
   version: string;
 }
 
 export interface ServiceStatus {
-  status: 'operational' | 'degraded' | 'down';
+  status: "operational" | "degraded" | "down";
   services: {
     authentication: string;
     accounts: string;
@@ -158,7 +158,7 @@ export interface AccountSearchForm {
 
 export interface TransactionForm {
   accountId: string;
-  type: 'credit' | 'debit';
+  type: "credit" | "debit";
   amount: string;
   description: string;
   reference: string;
@@ -174,18 +174,18 @@ export interface NavigationItem {
 
 // Permission Constants
 export const PERMISSIONS = {
-  VIEW_ACCOUNTS: 'view_accounts',
-  VIEW_TRANSACTIONS: 'view_transactions',
-  BASIC_OPERATIONS: 'basic_operations',
-  ADVANCED_OPERATIONS: 'advanced_operations',
-  ACCOUNT_MANAGEMENT: 'account_management',
-  RISK_ANALYSIS: 'risk_analysis',
+  VIEW_ACCOUNTS: "view_accounts",
+  VIEW_TRANSACTIONS: "view_transactions",
+  BASIC_OPERATIONS: "basic_operations",
+  ADVANCED_OPERATIONS: "advanced_operations",
+  ACCOUNT_MANAGEMENT: "account_management",
+  RISK_ANALYSIS: "risk_analysis",
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 
 // Role-based permission mapping
-export const ROLE_PERMISSIONS: Record<User['role'], Permission[]> = {
+export const ROLE_PERMISSIONS: Record<User["role"], Permission[]> = {
   representative: [PERMISSIONS.VIEW_ACCOUNTS, PERMISSIONS.VIEW_TRANSACTIONS],
   senior_representative: [
     PERMISSIONS.VIEW_ACCOUNTS,
@@ -199,5 +199,9 @@ export const ROLE_PERMISSIONS: Record<User['role'], Permission[]> = {
     PERMISSIONS.ADVANCED_OPERATIONS,
     PERMISSIONS.ACCOUNT_MANAGEMENT,
   ],
-  analyst: [PERMISSIONS.VIEW_ACCOUNTS, PERMISSIONS.VIEW_TRANSACTIONS, PERMISSIONS.RISK_ANALYSIS],
+  analyst: [
+    PERMISSIONS.VIEW_ACCOUNTS,
+    PERMISSIONS.VIEW_TRANSACTIONS,
+    PERMISSIONS.RISK_ANALYSIS,
+  ],
 };
