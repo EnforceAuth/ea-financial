@@ -2,6 +2,60 @@
 
 This monorepo contains the code for the EA Financial, a fictional global bank serving as an example institution for demonstrating best practices in policy-as-code.
 
+## Quick Start - Access the App in Your Browser
+
+### ⚡ Super Quick (One Command)
+```bash
+./app.sh
+```
+Opens the app instantly in your browser. This is the fastest way to get started!
+
+### 🚀 Easy One-Click Access (Recommended)
+```bash
+./infra/scripts/open-app.sh
+```
+This will start port-forwarding and automatically open the app in your browser at `http://localhost:8080`.
+
+### 🔗 Get URLs Only
+```bash
+./infra/scripts/get-urls.sh
+```
+Shows available URLs without starting persistent connections.
+
+### 🎯 Full Development Server
+```bash
+./infra/scripts/start-app.sh
+```
+Starts both frontend and API with auto-restart and detailed logging. Includes:
+- Frontend: `http://localhost:8080`
+- API: `http://localhost:8081`
+- Auto-opens browser
+- Keeps running until Ctrl+C
+
+### 🌉 Permanent Access (Alternative)
+For persistent access without keeping a terminal open:
+```bash
+./infra/scripts/setup-tunnel.sh
+```
+Then access at:
+- Frontend: `http://127.0.0.1:30000`
+- API: `http://127.0.0.1:30001`
+
+### 🛠️ More Options
+```bash
+./app.sh help     # Show all access options
+./app.sh start    # Full development mode  
+./app.sh urls     # Just show URLs
+./app.sh tunnel   # Permanent access
+./app.sh health   # Health checks
+./app.sh monitor  # Live monitoring
+```
+
+### 💡 Demo Credentials
+- **Manager**: `mjohnson` / `password456` (Full access)
+- **Senior Rep**: `jsmith` / `password123` (Enhanced access)
+- **Representative**: `rbrown` / `password789` (Read access)
+
 ## Structure
 
 This monorepo is organized into the following top-level directories:
