@@ -10,6 +10,8 @@
     "test:watch": "bun test --watch",
     "test:coverage": "bun test --coverage",
     "test:api": "./test-api.sh",
+    "test:opa": "./scripts/test-opa-integration.sh",
+    "test:offline": "./scripts/test-integration-offline.sh",
     "build": "bun build src/index.ts --outdir ./dist --target bun",
     "lint": "echo 'Add linting later'",
     "clean": "rm -rf dist"
@@ -25,11 +27,11 @@
   "author": "EA Financial Engineering Team",
   "license": "PRIVATE",
   "dependencies": {
-    "elysia": "latest"
+    "elysia": "1.4.5"
   },
   "devDependencies": {
-    "bun-types": "latest",
-    "@types/node": "^20.0.0"
+    "bun-types": "1.2.22",
+    "@types/node": "24.4.0"
   },
   "engines": {
     "node": ">=18.0.0",

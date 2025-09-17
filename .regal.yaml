@@ -1,0 +1,9 @@
+rules:
+  idiomatic:
+    directory-package-mismatch:
+      level: ignore
+  style:
+    pointless-reassignment:
+      level: ignore
+    messy-rule:
+      level: ignore

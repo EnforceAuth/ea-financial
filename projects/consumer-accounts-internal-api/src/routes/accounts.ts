@@ -1,64 +1,41 @@
 import { Elysia } from "elysia";
 import { dataService } from "../data/dataService";
+import { authService } from "../services/authService";
 import {
-  BalanceRequest,
   BalanceResponse,
   TransactionRequest,
   TransactionResponse,
   ApiResponse,
-  TransactionHistoryQuery,
 } from "../types";
-
-// Simple token validation middleware
-const validateToken = (authorization?: string) => {
-  if (!authorization || !authorization.startsWith("Bearer ")) {
-    return { valid: false, error: "Missing or invalid authorization header" };
-  }
-
-  try {
-    const token = authorization.replace("Bearer ", "");
-    const payload = JSON.parse(Buffer.from(token, "base64").toString());
-
-    if (payload.exp < Date.now()) {
-      return { valid: false, error: "Token expired" };
-    }
-
-    const user = dataService.getUserById(payload.userId);
-    if (!user || !user.isActive) {
-      return { valid: false, error: "Invalid user" };
-    }
-
-    return { valid: true, user };
-  } catch (error) {
-    return { valid: false, error: "Invalid token" };
-  }
-};
 
 export const accountRoutes = new Elysia({ prefix: "/accounts" })
   .get(
     "/:accountId/balance",
-    async ({ params, headers, set }): Promise<ApiResponse<BalanceResponse>> => {
+    async ({
+      params,
+      headers,
+      set,
+      request,
+    }): Promise<ApiResponse<BalanceResponse>> => {
       try {
-        const tokenValidation = validateToken(headers.authorization);
-
-        if (!tokenValidation.valid) {
-          set.status = 401;
-          return {
-            success: false,
-            message: "Unauthorized",
-            error: tokenValidation.error,
-          };
-        }
-
         const { accountId } = params;
 
-        // Check if user has permission to view accounts
-        if (!tokenValidation.user?.permissions.includes("view_accounts")) {
-          set.status = 403;
+        // Use OPA for authorization
+        const authResult = await authService.authorize(
+          "GET",
+          `/accounts/${accountId}/balance`,
+          headers.authorization,
+          headers as Record<string, string>,
+        );
+
+        if (!authResult.allowed) {
+          set.status = authResult.user ? 403 : 401;
           return {
             success: false,
-            message: "Insufficient permissions",
-            error: "User does not have view_accounts permission",
+            message: authResult.user
+              ? "Access denied"
+              : "Authentication required",
+            error: authResult.error,
           };
         }
 
@@ -102,25 +79,24 @@ export const accountRoutes = new Elysia({ prefix: "/accounts" })
     "/:accountId",
     async ({ params, headers, set }): Promise<ApiResponse<any>> => {
       try {
-        const tokenValidation = validateToken(headers.authorization);
-
-        if (!tokenValidation.valid) {
-          set.status = 401;
-          return {
-            success: false,
-            message: "Unauthorized",
-            error: tokenValidation.error,
-          };
-        }
-
         const { accountId } = params;
 
-        if (!tokenValidation.user?.permissions.includes("view_accounts")) {
-          set.status = 403;
+        // Use OPA for authorization
+        const authResult = await authService.authorize(
+          "GET",
+          `/accounts/${accountId}`,
+          headers.authorization,
+          headers as Record<string, string>,
+        );
+
+        if (!authResult.allowed) {
+          set.status = authResult.user ? 403 : 401;
           return {
             success: false,
-            message: "Insufficient permissions",
-            error: "User does not have view_accounts permission",
+            message: authResult.user
+              ? "Access denied"
+              : "Authentication required",
+            error: authResult.error,
           };
         }
 
@@ -161,28 +137,28 @@ export const accountRoutes = new Elysia({ prefix: "/accounts" })
       set,
     }): Promise<ApiResponse<TransactionResponse>> => {
       try {
-        const tokenValidation = validateToken(headers.authorization);
-
-        if (!tokenValidation.valid) {
-          set.status = 401;
-          return {
-            success: false,
-            message: "Unauthorized",
-            error: tokenValidation.error,
-          };
-        }
-
         const { accountId } = params;
-        const { amount, description, reference } = body as TransactionRequest;
 
-        if (!tokenValidation.user?.permissions.includes("basic_operations")) {
-          set.status = 403;
+        // Use OPA for authorization
+        const authResult = await authService.authorize(
+          "POST",
+          `/accounts/${accountId}/debit`,
+          headers.authorization,
+          headers as Record<string, string>,
+        );
+
+        if (!authResult.allowed) {
+          set.status = authResult.user ? 403 : 401;
           return {
             success: false,
-            message: "Insufficient permissions",
-            error: "User does not have basic_operations permission",
+            message: authResult.user
+              ? "Access denied"
+              : "Authentication required",
+            error: authResult.error,
           };
         }
+
+        const { amount, description, reference } = body as TransactionRequest;
 
         if (!amount || amount <= 0) {
           set.status = 400;
@@ -239,7 +215,7 @@ export const accountRoutes = new Elysia({ prefix: "/accounts" })
           description,
           reference: reference || `DEB${Date.now()}`,
           initiatedBy: "employee",
-          employeeId: tokenValidation.user!.employeeId,
+          employeeId: authResult.user!.employeeId,
           balanceAfter: newBalance,
         });
 
@@ -279,28 +255,28 @@ export const accountRoutes = new Elysia({ prefix: "/accounts" })
       set,
     }): Promise<ApiResponse<TransactionResponse>> => {
       try {
-        const tokenValidation = validateToken(headers.authorization);
-
-        if (!tokenValidation.valid) {
-          set.status = 401;
-          return {
-            success: false,
-            message: "Unauthorized",
-            error: tokenValidation.error,
-          };
-        }
-
         const { accountId } = params;
-        const { amount, description, reference } = body as TransactionRequest;
 
-        if (!tokenValidation.user?.permissions.includes("basic_operations")) {
-          set.status = 403;
+        // Use OPA for authorization
+        const authResult = await authService.authorize(
+          "POST",
+          `/accounts/${accountId}/credit`,
+          headers.authorization,
+          headers as Record<string, string>,
+        );
+
+        if (!authResult.allowed) {
+          set.status = authResult.user ? 403 : 401;
           return {
             success: false,
-            message: "Insufficient permissions",
-            error: "User does not have basic_operations permission",
+            message: authResult.user
+              ? "Access denied"
+              : "Authentication required",
+            error: authResult.error,
           };
         }
+
+        const { amount, description, reference } = body as TransactionRequest;
 
         if (!amount || amount <= 0) {
           set.status = 400;
@@ -343,7 +319,7 @@ export const accountRoutes = new Elysia({ prefix: "/accounts" })
           description,
           reference: reference || `CRD${Date.now()}`,
           initiatedBy: "employee",
-          employeeId: tokenValidation.user!.employeeId,
+          employeeId: authResult.user!.employeeId,
           balanceAfter: newBalance,
         });
 
@@ -378,25 +354,24 @@ export const accountRoutes = new Elysia({ prefix: "/accounts" })
     "/:accountId/transactions",
     async ({ params, query, headers, set }): Promise<ApiResponse<any>> => {
       try {
-        const tokenValidation = validateToken(headers.authorization);
-
-        if (!tokenValidation.valid) {
-          set.status = 401;
-          return {
-            success: false,
-            message: "Unauthorized",
-            error: tokenValidation.error,
-          };
-        }
-
         const { accountId } = params;
 
-        if (!tokenValidation.user?.permissions.includes("view_transactions")) {
-          set.status = 403;
+        // Use OPA for authorization
+        const authResult = await authService.authorize(
+          "GET",
+          `/accounts/${accountId}/transactions`,
+          headers.authorization,
+          headers as Record<string, string>,
+        );
+
+        if (!authResult.allowed) {
+          set.status = authResult.user ? 403 : 401;
           return {
             success: false,
-            message: "Insufficient permissions",
-            error: "User does not have view_transactions permission",
+            message: authResult.user
+              ? "Access denied"
+              : "Authentication required",
+            error: authResult.error,
           };
         }
 

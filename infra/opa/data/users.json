@@ -1,0 +1,136 @@
+{
+  "users": {
+    "jsmith": {
+      "role": "senior_representative",
+      "permissions": [
+        "accounts:read",
+        "accounts:update",
+        "balance:read",
+        "transactions:read",
+        "transactions:create",
+        "credit:create",
+        "debit:create",
+        "terms:read",
+        "auth:create"
+      ],
+      "department": "customer_service",
+      "active": true,
+      "token": "jsmith_token_123",
+      "exp": 1735689600,
+      "assigned_accounts": ["ACC001", "ACC002", "ACC003", "ACC004", "ACC005"]
+    },
+    "mjohnson": {
+      "role": "manager",
+      "permissions": [
+        "accounts:read",
+        "accounts:update",
+        "accounts:create",
+        "accounts:delete",
+        "balance:read",
+        "transactions:read",
+        "transactions:create",
+        "transactions:update",
+        "transactions:delete",
+        "credit:create",
+        "debit:create",
+        "terms:read",
+        "terms:update",
+        "auth:create",
+        "admin:read",
+        "admin:update"
+      ],
+      "department": "management",
+      "active": true,
+      "token": "mjohnson_token_456",
+      "exp": 1735689600,
+      "assigned_accounts": ["*"]
+    },
+    "rbrown": {
+      "role": "representative",
+      "permissions": [
+        "accounts:read",
+        "balance:read",
+        "transactions:read",
+        "terms:read",
+        "auth:create"
+      ],
+      "department": "customer_service",
+      "active": true,
+      "token": "rbrown_token_789",
+      "exp": 1735689600,
+      "assigned_accounts": ["ACC001", "ACC002", "ACC003"]
+    },
+    "slee": {
+      "role": "analyst",
+      "permissions": [
+        "accounts:read",
+        "balance:read",
+        "transactions:read",
+        "terms:read"
+      ],
+      "department": "analytics",
+      "active": false,
+      "token": "slee_token_000",
+      "exp": 1735689600,
+      "assigned_accounts": []
+    }
+  },
+  "user_accounts": {
+    "jsmith": ["ACC001", "ACC002", "ACC003", "ACC004", "ACC005"],
+    "mjohnson": [
+      "ACC001",
+      "ACC002",
+      "ACC003",
+      "ACC004",
+      "ACC005",
+      "ACC006",
+      "ACC007",
+      "ACC008",
+      "ACC009",
+      "ACC010"
+    ],
+    "rbrown": ["ACC001", "ACC002", "ACC003"],
+    "slee": []
+  },
+  "roles": {
+    "manager": {
+      "level": 4,
+      "description": "Full access to all banking operations and administrative functions"
+    },
+    "senior_representative": {
+      "level": 3,
+      "description": "Enhanced customer service representative with transaction privileges"
+    },
+    "representative": {
+      "level": 2,
+      "description": "Standard customer service representative with read access"
+    },
+    "analyst": {
+      "level": 1,
+      "description": "Analytics role with limited read-only access"
+    }
+  },
+  "departments": {
+    "management": {
+      "access_level": "full",
+      "business_hours": {
+        "start": 0,
+        "end": 24
+      }
+    },
+    "customer_service": {
+      "access_level": "standard",
+      "business_hours": {
+        "start": 6,
+        "end": 22
+      }
+    },
+    "analytics": {
+      "access_level": "readonly",
+      "business_hours": {
+        "start": 8,
+        "end": 18
+      }
+    }
+  }
+}
