@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '@/services/api';
 
@@ -36,15 +36,11 @@ const Terms: React.FC = () => {
     loading: true,
     error: null,
     activeTab: 'general',
-    searchTerm: '',
     expandedSections: new Set(),
+    searchTerm: '',
   });
 
-  useEffect(() => {
-    loadTermsData();
-  }, [loadTermsData]);
-
-  const loadTermsData = async () => {
+  const loadTermsData = useCallback(async () => {
     try {
       setState(prev => ({ ...prev, loading: true, error: null }));
       const termsData = await apiService.getAllTerms();
@@ -58,10 +54,14 @@ const Terms: React.FC = () => {
       setState(prev => ({
         ...prev,
         loading: false,
-        error: error instanceof Error ? error.message : 'Failed to load terms and policies',
+        error: error instanceof Error ? error.message : 'Failed to load terms data',
       }));
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadTermsData();
+  }, [loadTermsData]);
 
   const handleTabChange = (tab: string) => {
     setState(prev => ({ ...prev, activeTab: tab }));
@@ -123,12 +123,12 @@ const Terms: React.FC = () => {
     return parts.map((part, index) => {
       if (part.toLowerCase() === searchTerm.toLowerCase()) {
         return (
-          <mark key={index} className="search-highlight">
+          <mark key={`highlight-${index}-${part}`} className="search-highlight">
             {part}
           </mark>
         );
       }
-      return part;
+      return <span key={`text-${index}-${part.slice(0, 10)}`}>{part}</span>;
     });
   };
 
@@ -170,10 +170,14 @@ const Terms: React.FC = () => {
           <h2>Error Loading Terms</h2>
           <p>{state.error}</p>
           <div className="error-actions">
-            <button onClick={() => navigate('/dashboard')} className="secondary-button">
+            <button
+              type="button"
+              onClick={() => navigate('/dashboard')}
+              className="secondary-button"
+            >
               Return to Dashboard
             </button>
-            <button onClick={loadTermsData} className="primary-button">
+            <button type="button" onClick={loadTermsData} className="primary-button">
               Try Again
             </button>
           </div>
@@ -189,7 +193,7 @@ const Terms: React.FC = () => {
           <div className="not-found-icon">📭</div>
           <h2>No Terms Available</h2>
           <p>Terms and policies could not be loaded.</p>
-          <button onClick={() => navigate('/dashboard')} className="primary-button">
+          <button type="button" onClick={() => navigate('/dashboard')} className="primary-button">
             Return to Dashboard
           </button>
         </div>
@@ -205,6 +209,7 @@ const Terms: React.FC = () => {
       <div className="terms-header">
         <div className="header-left">
           <button
+            type="button"
             onClick={() => navigate('/dashboard')}
             className="back-button"
             aria-label="Back to Dashboard"
@@ -240,6 +245,7 @@ const Terms: React.FC = () => {
           <div className="nav-tabs">
             {tabs.map(tab => (
               <button
+                type="button"
                 key={tab.key}
                 onClick={() => handleTabChange(tab.key)}
                 className={`nav-tab ${state.activeTab === tab.key ? 'active' : ''}`}
@@ -252,6 +258,7 @@ const Terms: React.FC = () => {
 
           <div className="nav-actions">
             <button
+              type="button"
               onClick={expandAllSections}
               className="expand-button"
               title="Expand All Sections"
@@ -259,6 +266,7 @@ const Terms: React.FC = () => {
               📖 Expand All
             </button>
             <button
+              type="button"
               onClick={collapseAllSections}
               className="collapse-button"
               title="Collapse All Sections"
@@ -274,11 +282,15 @@ const Terms: React.FC = () => {
             <div className="search-results-header">
               <h3>Search Results</h3>
               <p>
-                {filteredSections.length} section{filteredSections.length !== 1 ? 's' : ''} found
-                for "{state.searchTerm}"
+                {filteredSections.length} section
+                {filteredSections.length !== 1 ? 's' : ''} found for "{state.searchTerm}"
               </p>
               {filteredSections.length === 0 && (
-                <button onClick={() => handleSearchChange('')} className="clear-search-button">
+                <button
+                  type="button"
+                  onClick={() => handleSearchChange('')}
+                  className="clear-search-button"
+                >
                   Clear Search
                 </button>
               )}
@@ -293,7 +305,11 @@ const Terms: React.FC = () => {
                 No sections match your search term "{state.searchTerm}". Try different keywords or
                 clear the search to view all sections.
               </p>
-              <button onClick={() => handleSearchChange('')} className="primary-button">
+              <button
+                type="button"
+                onClick={() => handleSearchChange('')}
+                className="primary-button"
+              >
                 Clear Search
               </button>
             </div>
@@ -304,17 +320,10 @@ const Terms: React.FC = () => {
 
                 return (
                   <div key={section.id} className="terms-section">
-                    <div
+                    <button
+                      type="button"
                       className="section-header"
                       onClick={() => toggleSection(section.id)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          toggleSection(section.id);
-                        }
-                      }}
                     >
                       <div className="section-title">
                         <span className="expand-icon">{isExpanded ? '📖' : '📚'}</span>
@@ -328,7 +337,7 @@ const Terms: React.FC = () => {
                         </span>
                         <span className="expand-indicator">{isExpanded ? '▼' : '▶'}</span>
                       </div>
-                    </div>
+                    </button>
 
                     {isExpanded && (
                       <div className="section-content">
@@ -372,6 +381,7 @@ const Terms: React.FC = () => {
 
             <div className="footer-actions">
               <button
+                type="button"
                 onClick={() => window.print()}
                 className="print-button"
                 title="Print Current Section"

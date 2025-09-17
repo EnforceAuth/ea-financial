@@ -1,4 +1,4 @@
-import type { User } from "../types";
+import type { User } from '../types';
 
 export interface OPARequest {
   input: {
@@ -29,28 +29,26 @@ class OPAService {
   private timeout: number;
 
   constructor() {
-    this.opaUrl = process.env.OPA_URL || "http://localhost:8181";
-    this.timeout = Number.parseInt(process.env.OPA_TIMEOUT || "5000", 10);
+    this.opaUrl = process.env.OPA_URL || 'http://localhost:8181';
+    this.timeout = Number.parseInt(process.env.OPA_TIMEOUT || '5000', 10);
   }
 
   /**
    * Extract user info from Authorization header using OPA token lookup
    */
-  async getUserFromToken(
-    authorization?: string,
-  ): Promise<{ user?: User; error?: string }> {
-    if (!authorization || !authorization.startsWith("Bearer ")) {
-      return { error: "Missing or invalid authorization header" };
+  async getUserFromToken(authorization?: string): Promise<{ user?: User; error?: string }> {
+    if (!authorization || !authorization.startsWith('Bearer ')) {
+      return { error: 'Missing or invalid authorization header' };
     }
 
-    const token = authorization.replace("Bearer ", "");
+    const token = authorization.replace('Bearer ', '');
 
     try {
       // Call OPA to look up user by token
       const response = await fetch(`${this.opaUrl}/v1/data/users`, {
-        method: "GET",
+        method: 'GET',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         signal: AbortSignal.timeout(this.timeout),
       });
@@ -70,7 +68,7 @@ class OPAService {
         if (user.token === token) {
           // Check if token is expired
           if (user.exp && user.exp * 1000 < Date.now()) {
-            return { error: "Token expired" };
+            return { error: 'Token expired' };
           }
 
           return {
@@ -86,9 +84,9 @@ class OPAService {
         }
       }
 
-      return { error: "Invalid token" };
+      return { error: 'Invalid token' };
     } catch (_error) {
-      return { error: "Token validation service unavailable" };
+      return { error: 'Token validation service unavailable' };
     }
   }
 
@@ -99,7 +97,7 @@ class OPAService {
     method: string,
     path: string,
     authorization?: string,
-    headers?: Record<string, string>,
+    headers?: Record<string, string>
   ): Promise<{ allowed: boolean; user?: User; error?: string }> {
     try {
       // First get user from token if provided
@@ -136,9 +134,9 @@ class OPAService {
       }
 
       const response = await fetch(`${this.opaUrl}/v1/data/main/allow`, {
-        method: "POST",
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify(opaRequest),
         signal: AbortSignal.timeout(this.timeout),
@@ -165,8 +163,7 @@ class OPAService {
       // For production banking systems, secure default is preferred
       return {
         allowed: false,
-        error:
-          error instanceof Error ? error.message : "OPA service unavailable",
+        error: error instanceof Error ? error.message : 'OPA service unavailable',
       };
     }
   }
@@ -176,16 +173,16 @@ class OPAService {
    */
   private isPublicEndpoint(method: string, path: string): boolean {
     const publicEndpoints = [
-      { method: "GET", path: "/" },
-      { method: "GET", path: "/health" },
-      { method: "GET", path: "/status" },
-      { method: "OPTIONS", path: "*" },
+      { method: 'GET', path: '/' },
+      { method: 'GET', path: '/health' },
+      { method: 'GET', path: '/status' },
+      { method: 'OPTIONS', path: '*' },
     ];
 
     return publicEndpoints.some(
-      (endpoint) =>
+      endpoint =>
         endpoint.method === method.toUpperCase() &&
-        (endpoint.path === "*" || endpoint.path === path),
+        (endpoint.path === '*' || endpoint.path === path)
     );
   }
 
@@ -195,21 +192,18 @@ class OPAService {
   async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
     try {
       const response = await fetch(`${this.opaUrl}/health`, {
-        method: "GET",
+        method: 'GET',
         signal: AbortSignal.timeout(this.timeout),
       });
 
       return {
         healthy: response.ok,
-        error: response.ok
-          ? undefined
-          : `OPA health check failed: ${response.status}`,
+        error: response.ok ? undefined : `OPA health check failed: ${response.status}`,
       };
     } catch (error) {
       return {
         healthy: false,
-        error:
-          error instanceof Error ? error.message : "OPA service unreachable",
+        error: error instanceof Error ? error.message : 'OPA service unreachable',
       };
     }
   }
@@ -220,7 +214,7 @@ class OPAService {
   async getDecisionLogs(limit = 10): Promise<unknown[]> {
     try {
       const response = await fetch(`${this.opaUrl}/logs?limit=${limit}`, {
-        method: "GET",
+        method: 'GET',
         signal: AbortSignal.timeout(this.timeout),
       });
 

@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth, usePermissions } from '@/context/AuthContext';
 import { apiService } from '@/services/api';
@@ -20,6 +20,7 @@ interface ProcessTransactionState {
   error: string | null;
   success: Transaction | null;
   validationErrors: Record<string, string>;
+  step: string;
 }
 
 const ProcessTransaction: React.FC = () => {
@@ -27,6 +28,10 @@ const ProcessTransaction: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { hasPermission } = usePermissions();
+
+  const amountId = useId();
+  const descriptionId = useId();
+  const referenceId = useId();
 
   const [state, setState] = useState<ProcessTransactionState>({
     account: null,
@@ -41,27 +46,10 @@ const ProcessTransaction: React.FC = () => {
     error: null,
     success: null,
     validationErrors: {},
+    step: 'form',
   });
 
-  useEffect(() => {
-    // Check permissions
-    if (!hasPermission(PERMISSIONS.BASIC_OPERATIONS)) {
-      navigate('/dashboard');
-      return;
-    }
-
-    if (accountId) {
-      loadAccountData(accountId);
-    } else {
-      setState(prev => ({
-        ...prev,
-        loading: false,
-        error: 'No account ID provided',
-      }));
-    }
-  }, [accountId, hasPermission, navigate, loadAccountData]);
-
-  const loadAccountData = async (id: string) => {
+  const loadAccountData = useCallback(async (id: string) => {
     try {
       setState(prev => ({ ...prev, loading: true, error: null }));
       const accountData = await apiService.getAccount(id);
@@ -85,7 +73,25 @@ const ProcessTransaction: React.FC = () => {
         error: error instanceof Error ? error.message : 'Failed to load account data',
       }));
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    // Check permissions
+    if (!hasPermission(PERMISSIONS.BASIC_OPERATIONS)) {
+      navigate('/dashboard');
+      return;
+    }
+
+    if (accountId) {
+      loadAccountData(accountId);
+    } else {
+      setState(prev => ({
+        ...prev,
+        loading: false,
+        error: 'No account ID provided',
+      }));
+    }
+  }, [accountId, hasPermission, navigate, loadAccountData]);
 
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
@@ -221,7 +227,7 @@ const ProcessTransaction: React.FC = () => {
           <div className="access-denied-icon">🚫</div>
           <h2>Access Denied</h2>
           <p>You don't have permission to process transactions.</p>
-          <button onClick={() => navigate('/dashboard')} className="primary-button">
+          <button type="button" onClick={() => navigate('/dashboard')} className="primary-button">
             Return to Dashboard
           </button>
         </div>
@@ -246,11 +252,19 @@ const ProcessTransaction: React.FC = () => {
           <h2>Error Loading Account</h2>
           <p>{state.error}</p>
           <div className="error-actions">
-            <button onClick={() => navigate('/dashboard')} className="secondary-button">
+            <button
+              type="button"
+              onClick={() => navigate('/dashboard')}
+              className="secondary-button"
+            >
               Return to Dashboard
             </button>
             {accountId && (
-              <button onClick={() => loadAccountData(accountId)} className="primary-button">
+              <button
+                type="button"
+                onClick={() => loadAccountData(accountId)}
+                className="primary-button"
+              >
                 Try Again
               </button>
             )}
@@ -267,7 +281,7 @@ const ProcessTransaction: React.FC = () => {
           <div className="not-found-icon">🔍</div>
           <h2>Account Not Found</h2>
           <p>The requested account could not be found.</p>
-          <button onClick={() => navigate('/dashboard')} className="primary-button">
+          <button type="button" onClick={() => navigate('/dashboard')} className="primary-button">
             Return to Dashboard
           </button>
         </div>
@@ -285,6 +299,7 @@ const ProcessTransaction: React.FC = () => {
       <div className="transaction-header">
         <div className="header-left">
           <button
+            type="button"
             onClick={() => navigate(`/accounts/${accountId}`)}
             className="back-button"
             aria-label="Back to Account Details"
@@ -327,7 +342,7 @@ const ProcessTransaction: React.FC = () => {
               <Link to={`/accounts/${accountId}`} className="primary-button">
                 View Account Details
               </Link>
-              <button onClick={handleReset} className="secondary-button">
+              <button type="button" onClick={handleReset} className="secondary-button">
                 Process Another Transaction
               </button>
             </div>
@@ -354,30 +369,30 @@ const ProcessTransaction: React.FC = () => {
             <h2>Account Summary</h2>
             <div className="summary-card">
               <div className="summary-item">
-                <label>Account Holder</label>
-                <value>{account.customerName}</value>
+                <span className="info-label">Account Holder</span>
+                <div className="info-value">{account.customerName}</div>
               </div>
               <div className="summary-item">
-                <label>Account Number</label>
-                <value>{account.accountNumber}</value>
+                <span className="info-label">Account Number</span>
+                <div className="info-value">{account.accountNumber}</div>
               </div>
               <div className="summary-item">
-                <label>Account Type</label>
-                <value>
+                <span className="info-label">Account Type</span>
+                <div className="info-value">
                   {account.accountType.charAt(0).toUpperCase() + account.accountType.slice(1)}
-                </value>
+                </div>
               </div>
               <div className="summary-item">
-                <label>Current Balance</label>
-                <value className="balance-amount">{formatCurrency(account.balance)}</value>
+                <span className="info-label">Current Balance</span>
+                <div className="info-value balance-amount">{formatCurrency(account.balance)}</div>
               </div>
               <div className="summary-item">
-                <label>Status</label>
-                <value>
+                <span className="info-label">Status</span>
+                <div className="info-value">
                   <span className={`status-badge status-${account.status}`}>
                     {account.status.charAt(0).toUpperCase() + account.status.slice(1)}
                   </span>
-                </value>
+                </div>
               </div>
             </div>
           </div>
@@ -388,7 +403,7 @@ const ProcessTransaction: React.FC = () => {
             <form onSubmit={handleSubmit} className="transaction-form">
               {/* Transaction Type */}
               <div className="form-group">
-                <label>Transaction Type</label>
+                <span className="info-label">Transaction Type</span>
                 <div className="radio-group">
                   <label className="radio-option">
                     <input
@@ -423,12 +438,12 @@ const ProcessTransaction: React.FC = () => {
 
               {/* Amount */}
               <div className="form-group">
-                <label htmlFor="amount">Amount</label>
+                <label htmlFor={amountId}>Amount</label>
                 <div className="currency-input-group">
                   <span className="currency-symbol">$</span>
                   <input
                     type="number"
-                    id="amount"
+                    id={amountId}
                     value={formData.amount}
                     onChange={e => handleInputChange('amount', e.target.value)}
                     placeholder="0.00"
@@ -446,10 +461,10 @@ const ProcessTransaction: React.FC = () => {
 
               {/* Description */}
               <div className="form-group">
-                <label htmlFor="description">Description</label>
+                <label htmlFor={descriptionId}>Description</label>
                 <input
                   type="text"
-                  id="description"
+                  id={descriptionId}
                   value={formData.description}
                   onChange={e => handleInputChange('description', e.target.value)}
                   placeholder="Enter transaction description"
@@ -465,12 +480,12 @@ const ProcessTransaction: React.FC = () => {
                 )}
               </div>
 
-              {/* Reference */}
+              {/* Reference Number */}
               <div className="form-group">
-                <label htmlFor="reference">Reference Number</label>
+                <label htmlFor={referenceId}>Reference Number</label>
                 <input
                   type="text"
-                  id="reference"
+                  id={referenceId}
                   value={formData.reference}
                   onChange={e => handleInputChange('reference', e.target.value)}
                   placeholder="Enter reference number"
@@ -547,33 +562,33 @@ const ProcessTransaction: React.FC = () => {
 
                 <div className="preview-details">
                   <div className="preview-item">
-                    <label>Amount</label>
-                    <value className={`amount ${formData.type}`}>
+                    <span className="info-label">Amount</span>
+                    <div className={`info-value amount ${formData.type}`}>
                       {formData.type === 'credit' ? '+' : '-'}
                       {formatCurrency(Number.parseFloat(formData.amount) || 0)}
-                    </value>
+                    </div>
                   </div>
                   <div className="preview-item">
-                    <label>Description</label>
-                    <value>{formData.description}</value>
+                    <span className="info-label">Description</span>
+                    <div className="info-value">{formData.description}</div>
                   </div>
                   <div className="preview-item">
-                    <label>Reference</label>
-                    <value>{formData.reference}</value>
+                    <span className="info-label">Reference</span>
+                    <div className="info-value">{formData.reference}</div>
                   </div>
                   <div className="preview-item">
-                    <label>Current Balance</label>
-                    <value>{formatCurrency(account.balance)}</value>
+                    <span className="info-label">Current Balance</span>
+                    <div className="info-value">{formatCurrency(account.balance)}</div>
                   </div>
                   <div className="preview-item">
-                    <label>Projected Balance</label>
-                    <value className="projected-balance">
+                    <span className="info-label">Projected Balance</span>
+                    <div className="info-value projected-balance">
                       {formatCurrency(
                         account.balance +
                           (formData.type === 'credit' ? 1 : -1) *
                             (Number.parseFloat(formData.amount) || 0)
                       )}
-                    </value>
+                    </div>
                   </div>
                 </div>
               </div>

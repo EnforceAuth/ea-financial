@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { usePermissions } from '@/context/AuthContext';
 import { apiService } from '@/services/api';
@@ -36,16 +36,30 @@ const TransactionHistory: React.FC = () => {
     transactions: null,
     loading: true,
     error: null,
-    currentPage: 1,
-    pageSize: 20,
     filters: {
       type: 'all',
       dateRange: 'all',
       startDate: '',
       endDate: '',
-      searchTerm: '',
     },
+    currentPage: 1,
+    pageSize: 25,
   });
+
+  const loadAccountData = useCallback(async (id: string) => {
+    try {
+      const accountData = await apiService.getAccount(id);
+      setState(prev => ({
+        ...prev,
+        account: accountData,
+      }));
+    } catch (error) {
+      setState(prev => ({
+        ...prev,
+        error: error instanceof Error ? error.message : 'Failed to load account data',
+      }));
+    }
+  }, []);
 
   useEffect(() => {
     // Check permissions
@@ -65,50 +79,37 @@ const TransactionHistory: React.FC = () => {
     }
   }, [accountId, hasPermission, navigate, loadAccountData]);
 
+  const loadTransactionHistory = useCallback(
+    async (id: string) => {
+      try {
+        setState(prev => ({ ...prev, loading: true, error: null }));
+
+        const transactionsData = await apiService.getTransactionHistory(id, {
+          page: state.currentPage,
+          limit: state.pageSize,
+        });
+
+        setState(prev => ({
+          ...prev,
+          transactions: transactionsData,
+          loading: false,
+        }));
+      } catch (error) {
+        setState(prev => ({
+          ...prev,
+          loading: false,
+          error: error instanceof Error ? error.message : 'Failed to load transaction history',
+        }));
+      }
+    },
+    [state.currentPage, state.pageSize]
+  );
+
   useEffect(() => {
     if (accountId && state.account) {
       loadTransactionHistory(accountId);
     }
   }, [accountId, loadTransactionHistory, state.account]);
-
-  const loadAccountData = async (id: string) => {
-    try {
-      const accountData = await apiService.getAccount(id);
-      setState(prev => ({
-        ...prev,
-        account: accountData,
-      }));
-    } catch (error) {
-      setState(prev => ({
-        ...prev,
-        loading: false,
-        error: error instanceof Error ? error.message : 'Failed to load account data',
-      }));
-    }
-  };
-
-  const loadTransactionHistory = async (id: string) => {
-    try {
-      setState(prev => ({ ...prev, loading: true, error: null }));
-
-      const transactionsData = await apiService.getTransactionHistory(id, {
-        page: state.currentPage,
-        limit: state.pageSize,
-      });
-
-      setState(prev => ({
-        ...prev,
-        transactions: transactionsData,
-        loading: false,
-      }));
-    } catch (error) {
-      setState(prev => ({
-        ...prev,
-        loading: false,
-        error: error instanceof Error ? error.message : 'Failed to load transaction history',
-      }));
-    }
-  };
 
   const handlePageChange = (newPage: number) => {
     setState(prev => ({ ...prev, currentPage: newPage }));
@@ -144,7 +145,9 @@ const TransactionHistory: React.FC = () => {
     }));
   };
 
-  const exportTransactions = () => {};
+  const exportTransactions = () => {
+    // TODO: Implement export functionality
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -267,7 +270,7 @@ const TransactionHistory: React.FC = () => {
           <div className="access-denied-icon">🚫</div>
           <h2>Access Denied</h2>
           <p>You don't have permission to view transaction history.</p>
-          <button onClick={() => navigate('/dashboard')} className="primary-button">
+          <button type="button" onClick={() => navigate('/dashboard')} className="primary-button">
             Return to Dashboard
           </button>
         </div>
@@ -292,11 +295,19 @@ const TransactionHistory: React.FC = () => {
           <h2>Error Loading Transactions</h2>
           <p>{state.error}</p>
           <div className="error-actions">
-            <button onClick={() => navigate('/dashboard')} className="secondary-button">
+            <button
+              type="button"
+              onClick={() => navigate('/dashboard')}
+              className="secondary-button"
+            >
               Return to Dashboard
             </button>
             {accountId && (
-              <button onClick={() => loadTransactionHistory(accountId)} className="primary-button">
+              <button
+                type="button"
+                onClick={() => loadTransactionHistory(accountId)}
+                className="primary-button"
+              >
                 Try Again
               </button>
             )}
@@ -313,7 +324,7 @@ const TransactionHistory: React.FC = () => {
           <div className="not-found-icon">🔍</div>
           <h2>No Data Available</h2>
           <p>Unable to load account or transaction data.</p>
-          <button onClick={() => navigate('/dashboard')} className="primary-button">
+          <button type="button" onClick={() => navigate('/dashboard')} className="primary-button">
             Return to Dashboard
           </button>
         </div>
@@ -329,6 +340,7 @@ const TransactionHistory: React.FC = () => {
       <div className="transaction-history-header">
         <div className="header-left">
           <button
+            type="button"
             onClick={() => navigate(`/accounts/${accountId}`)}
             className="back-button"
             aria-label="Back to Account Details"
@@ -348,6 +360,7 @@ const TransactionHistory: React.FC = () => {
 
         <div className="header-right">
           <button
+            type="button"
             onClick={exportTransactions}
             className="export-button"
             title="Export Transactions"
@@ -373,7 +386,7 @@ const TransactionHistory: React.FC = () => {
             </div>
 
             <div className="filter-group">
-              <label>Type:</label>
+              <span className="filter-label">Type:</span>
               <select
                 value={state.filters.type}
                 onChange={e => handleFilterChange('type', e.target.value)}
@@ -386,7 +399,7 @@ const TransactionHistory: React.FC = () => {
             </div>
 
             <div className="filter-group">
-              <label>Date Range:</label>
+              <span className="filter-label">Date Range:</span>
               <select
                 value={state.filters.dateRange}
                 onChange={e => handleFilterChange('dateRange', e.target.value)}
@@ -403,7 +416,7 @@ const TransactionHistory: React.FC = () => {
             {state.filters.dateRange === 'custom' && (
               <>
                 <div className="filter-group">
-                  <label>Start Date:</label>
+                  <span className="filter-label">Start Date:</span>
                   <input
                     type="date"
                     value={state.filters.startDate}
@@ -412,7 +425,7 @@ const TransactionHistory: React.FC = () => {
                   />
                 </div>
                 <div className="filter-group">
-                  <label>End Date:</label>
+                  <span className="filter-label">End Date:</span>
                   <input
                     type="date"
                     value={state.filters.endDate}
@@ -423,7 +436,7 @@ const TransactionHistory: React.FC = () => {
               </>
             )}
 
-            <button onClick={clearFilters} className="clear-filters-button">
+            <button type="button" onClick={clearFilters} className="clear-filters-button">
               Clear Filters
             </button>
           </div>
@@ -460,7 +473,7 @@ const TransactionHistory: React.FC = () => {
           <div className="transactions-header">
             <h2>Transactions</h2>
             <div className="page-size-selector">
-              <label>Show:</label>
+              <span className="filter-label">Show:</span>
               <select
                 value={state.pageSize}
                 onChange={e => handlePageSizeChange(Number.parseInt(e.target.value, 10))}
@@ -488,7 +501,7 @@ const TransactionHistory: React.FC = () => {
               {(state.filters.type !== 'all' ||
                 state.filters.dateRange !== 'all' ||
                 state.filters.searchTerm) && (
-                <button onClick={clearFilters} className="primary-button">
+                <button type="button" onClick={clearFilters} className="primary-button">
                   Clear Filters
                 </button>
               )}
@@ -578,6 +591,7 @@ const TransactionHistory: React.FC = () => {
 
                   <div className="pagination-controls">
                     <button
+                      type="button"
                       onClick={() => handlePageChange(state.currentPage - 1)}
                       disabled={state.currentPage <= 1}
                       className="pagination-button"
@@ -587,7 +601,7 @@ const TransactionHistory: React.FC = () => {
 
                     <div className="page-numbers">
                       {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                        let pageNum;
+                        let pageNum: number;
                         if (totalPages <= 5) {
                           pageNum = i + 1;
                         } else if (state.currentPage <= 3) {
@@ -601,6 +615,7 @@ const TransactionHistory: React.FC = () => {
                         return (
                           <button
                             key={pageNum}
+                            type="button"
                             onClick={() => handlePageChange(pageNum)}
                             className={`page-button ${state.currentPage === pageNum ? 'active' : ''}`}
                           >
@@ -611,6 +626,7 @@ const TransactionHistory: React.FC = () => {
                     </div>
 
                     <button
+                      type="button"
                       onClick={() => handlePageChange(state.currentPage + 1)}
                       disabled={state.currentPage >= totalPages}
                       className="pagination-button"

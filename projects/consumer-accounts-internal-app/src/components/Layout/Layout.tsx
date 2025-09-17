@@ -128,6 +128,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               </div>
               <div className="user-actions">
                 <button
+                  type="button"
                   onClick={handleLogout}
                   className="logout-button"
                   title="Sign Out"
@@ -165,6 +166,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <div className="quick-actions">
         {hasPermission(PERMISSIONS.BASIC_OPERATIONS) && (
           <button
+            type="button"
             className="quick-action-button"
             title="Quick Transaction"
             onClick={() => navigate('/accounts/search?action=transaction')}
@@ -174,6 +176,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         )}
         {hasPermission(PERMISSIONS.VIEW_ACCOUNTS) && (
           <button
+            type="button"
             className="quick-action-button"
             title="Account Lookup"
             onClick={() => navigate('/accounts/search')}

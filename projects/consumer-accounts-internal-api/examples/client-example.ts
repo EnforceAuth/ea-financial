@@ -24,10 +24,10 @@ interface Account {
   id: string;
   customerId: string;
   accountNumber: string;
-  accountType: "checking" | "savings";
+  accountType: 'checking' | 'savings';
   balance: number;
   currency: string;
-  status: "active" | "frozen" | "closed";
+  status: 'active' | 'frozen' | 'closed';
   createdAt: string;
   updatedAt: string;
 }
@@ -35,13 +35,13 @@ interface Account {
 interface Transaction {
   id: string;
   accountId: string;
-  type: "debit" | "credit";
+  type: 'debit' | 'credit';
   amount: number;
   currency: string;
   description: string;
   reference: string;
-  status: "completed" | "pending" | "failed" | "pending_review";
-  initiatedBy: "customer" | "employee" | "system" | "external";
+  status: 'completed' | 'pending' | 'failed' | 'pending_review';
+  initiatedBy: 'customer' | 'employee' | 'system' | 'external';
   employeeId: string | null;
   timestamp: string;
   balanceAfter: number;
@@ -80,18 +80,15 @@ class EAFinancialAPIClient {
   private baseUrl: string;
   private token: string | null = null;
 
-  constructor(baseUrl = "http://localhost:3001") {
+  constructor(baseUrl = 'http://localhost:3001') {
     this.baseUrl = baseUrl;
   }
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {},
-  ): Promise<ApiResponse<T>> {
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
     const url = `${this.baseUrl}${endpoint}`;
 
     const headers: HeadersInit = {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
       ...options.headers,
     };
 
@@ -108,8 +105,8 @@ class EAFinancialAPIClient {
   }
 
   async login(username: string, password: string): Promise<boolean> {
-    const response = await this.request<LoginResponse>("/auth/login", {
-      method: "POST",
+    const response = await this.request<LoginResponse>('/auth/login', {
+      method: 'POST',
       body: JSON.stringify({ username, password }),
     });
 
@@ -125,8 +122,8 @@ class EAFinancialAPIClient {
       return true;
     }
 
-    const response = await this.request("/auth/logout", {
-      method: "POST",
+    const response = await this.request('/auth/logout', {
+      method: 'POST',
     });
 
     if (response.success) {
@@ -137,9 +134,7 @@ class EAFinancialAPIClient {
   }
 
   async getAccountBalance(accountId: string): Promise<BalanceResponse | null> {
-    const response = await this.request<BalanceResponse>(
-      `/accounts/${accountId}/balance`,
-    );
+    const response = await this.request<BalanceResponse>(`/accounts/${accountId}/balance`);
 
     if (response.success && response.data) {
       return response.data;
@@ -156,12 +151,9 @@ class EAFinancialAPIClient {
     return null;
   }
 
-  async creditAccount(
-    accountId: string,
-    request: TransactionRequest,
-  ): Promise<Transaction> {
+  async creditAccount(accountId: string, request: TransactionRequest): Promise<Transaction> {
     const response = await this.request(`/accounts/${accountId}/credit`, {
-      method: "POST",
+      method: 'POST',
       body: JSON.stringify(request),
     });
 
@@ -171,12 +163,9 @@ class EAFinancialAPIClient {
     return null;
   }
 
-  async debitAccount(
-    accountId: string,
-    request: TransactionRequest,
-  ): Promise<Transaction> {
+  async debitAccount(accountId: string, request: TransactionRequest): Promise<Transaction> {
     const response = await this.request(`/accounts/${accountId}/debit`, {
-      method: "POST",
+      method: 'POST',
       body: JSON.stringify(request),
     });
 
@@ -186,17 +175,12 @@ class EAFinancialAPIClient {
     return null;
   }
 
-  async getTransactionHistory(
-    accountId: string,
-    limit = 10,
-  ): Promise<Transaction[]> {
-    const response = await this.request(
-      `/accounts/${accountId}/transactions?limit=${limit}`,
-    );
+  async getTransactionHistory(accountId: string, limit = 10): Promise<Transaction[]> {
+    const response = await this.request(`/accounts/${accountId}/transactions?limit=${limit}`);
 
     if (response.success && response.data?.transactions) {
       response.data.transactions.forEach((txn: Transaction, _index: number) => {
-        const _sign = txn.type === "credit" ? "+" : "-";
+        const _sign = txn.type === 'credit' ? '+' : '-';
       });
       return response.data.transactions;
     }
@@ -204,7 +188,7 @@ class EAFinancialAPIClient {
   }
 
   async getTerms(section?: string): Promise<unknown> {
-    const endpoint = section ? `/terms/${section}` : "/terms";
+    const endpoint = section ? `/terms/${section}` : '/terms';
     const response = await this.request(endpoint);
 
     if (response.success && response.data) {
@@ -219,29 +203,29 @@ async function runExample() {
   const client = new EAFinancialAPIClient();
 
   try {
-    const loginSuccess = await client.login("mjohnson", "password456");
+    const loginSuccess = await client.login('mjohnson', 'password456');
     if (!loginSuccess) {
-      throw new Error("Authentication failed");
+      throw new Error('Authentication failed');
     }
-    await client.getAccount("acc_001");
-    await client.getAccountBalance("acc_001");
-    await client.creditAccount("acc_001", {
+    await client.getAccount('acc_001');
+    await client.getAccountBalance('acc_001');
+    await client.creditAccount('acc_001', {
       amount: 250.0,
-      description: "Client Example Credit",
-      reference: "CLIENT_001",
-      employeeId: "emp_67890",
+      description: 'Client Example Credit',
+      reference: 'CLIENT_001',
+      employeeId: 'emp_67890',
     });
 
-    await client.debitAccount("acc_001", {
+    await client.debitAccount('acc_001', {
       amount: 100.0,
-      description: "Client Example Debit",
-      reference: "CLIENT_002",
-      employeeId: "emp_67890",
+      description: 'Client Example Debit',
+      reference: 'CLIENT_002',
+      employeeId: 'emp_67890',
     });
-    await client.getAccountBalance("acc_001");
-    await client.getTransactionHistory("acc_001", 5);
-    await client.getTerms("account-policies");
-    await client.getAccountBalance("acc_999"); // Non-existent account
+    await client.getAccountBalance('acc_001');
+    await client.getTransactionHistory('acc_001', 5);
+    await client.getTerms('account-policies');
+    await client.getAccountBalance('acc_999'); // Non-existent account
     await client.logout();
   } catch (_error) {
     // Example client error - would handle appropriately in production
@@ -257,7 +241,7 @@ export class BankingOperations {
     fromAccountId: string,
     toAccountId: string,
     amount: number,
-    employeeId: string,
+    employeeId: string
   ): Promise<boolean> {
     try {
       // Debit from source account
