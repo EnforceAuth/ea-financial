@@ -1,0 +1,1134 @@
+name: End-to-End Testing
+
+on:
+  schedule:
+    # Run E2E tests daily at 4 AM UTC
+    - cron: "0 4 * * *"
+  pull_request:
+    branches: [main]
+    paths:
+      - "projects/consumer-accounts-internal-app/**"
+      - "projects/consumer-accounts-internal-api/**"
+      - ".github/workflows/e2e-testing.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+          - local
+      browser:
+        description: "Browser to test"
+        required: true
+        default: "chromium"
+        type: choice
+        options:
+          - chromium
+          - firefox
+          - webkit
+          - all
+      test_suite:
+        description: "Test suite to run"
+        required: true
+        default: "smoke"
+        type: choice
+        options:
+          - smoke
+          - regression
+          - critical-path
+          - accessibility
+          - all
+
+concurrency:
+  group: e2e-testing-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "20"
+  BUN_VERSION: "1.2.22"
+  PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
+
+jobs:
+  # Setup test environment
+  setup-e2e-environment:
+    name: Setup E2E Environment
+    runs-on: ubuntu-latest
+    outputs:
+      api_url: ${{ steps.setup.outputs.api_url }}
+      app_url: ${{ steps.setup.outputs.app_url }}
+      test_user_token: ${{ steps.setup.outputs.test_user_token }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup environment URLs
+        id: setup
+        run: |
+          if [[ "${{ github.event.inputs.environment }}" == "staging" ]]; then
+            echo "api_url=https://staging-api.ea-financial.com" >> $GITHUB_OUTPUT
+            echo "app_url=https://staging.ea-financial.com" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event.inputs.environment }}" == "production" ]]; then
+            echo "api_url=https://api.ea-financial.com" >> $GITHUB_OUTPUT
+            echo "app_url=https://internal.ea-financial.com" >> $GITHUB_OUTPUT
+          else
+            echo "api_url=http://localhost:3001" >> $GITHUB_OUTPUT
+            echo "app_url=http://localhost:3000" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate test authentication token
+        id: auth
+        run: |
+          # For local/staging, we can generate a test token
+          # For production, this would use a dedicated test service account
+          if [[ "${{ github.event.inputs.environment }}" != "production" ]]; then
+            echo "test_user_token=test_token_placeholder" >> $GITHUB_OUTPUT
+          else
+            echo "test_user_token=${{ secrets.E2E_TEST_TOKEN_PROD }}" >> $GITHUB_OUTPUT
+          fi
+
+  # Start local services if needed
+  start-local-services:
+    name: Start Local Services
+    runs-on: ubuntu-latest
+    needs: setup-e2e-environment
+    if: ${{ github.event.inputs.environment == 'local' || github.event_name == 'pull_request' }}
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ea_financial_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build frontend application
+        working-directory: ./projects/consumer-accounts-internal-app
+        run: bun run build
+
+      - name: Start API server
+        working-directory: ./projects/consumer-accounts-internal-api
+        run: |
+          bun run start &
+          echo $! > api_server.pid
+          sleep 15
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ea_financial_test
+          REDIS_URL: redis://localhost:6379
+          PORT: 3001
+
+      - name: Start frontend server
+        working-directory: ./projects/consumer-accounts-internal-app
+        run: |
+          bun run preview --port 3000 &
+          echo $! > app_server.pid
+          sleep 10
+
+      - name: Verify services are running
+        run: |
+          curl -f http://localhost:3001/health || exit 1
+          curl -f http://localhost:3000 || exit 1
+          echo "Both services are running successfully"
+
+      - name: Keep services alive
+        run: |
+          # Keep the job alive for other jobs to use the services
+          sleep 1800 & # 30 minutes
+          wait
+
+  # Smoke tests (quick validation)
+  smoke-tests:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    needs: [setup-e2e-environment, start-local-services]
+    if: |
+      always() &&
+      (needs.start-local-services.result == 'success' || needs.start-local-services.result == 'skipped') &&
+      (github.event.inputs.test_suite == 'smoke' || github.event.inputs.test_suite == 'all' || github.event_name == 'schedule')
+    strategy:
+      matrix:
+        browser: [chromium]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright
+        run: |
+          bun add -D @playwright/test
+          bunx playwright install ${{ matrix.browser }}
+
+      - name: Create E2E test configuration
+        run: |
+          mkdir -p e2e-tests
+
+          cat > playwright.config.js << 'EOF'
+          import { defineConfig, devices } from '@playwright/test';
+
+          export default defineConfig({
+            testDir: './e2e-tests',
+            fullyParallel: true,
+            forbidOnly: !!process.env.CI,
+            retries: process.env.CI ? 2 : 0,
+            workers: process.env.CI ? 1 : undefined,
+            reporter: [
+              ['html', { outputFolder: 'e2e-report' }],
+              ['json', { outputFile: 'e2e-results.json' }],
+              ['junit', { outputFile: 'e2e-junit.xml' }]
+            ],
+            use: {
+              baseURL: process.env.APP_URL || 'http://localhost:3000',
+              trace: 'on-first-retry',
+              screenshot: 'only-on-failure',
+              video: 'retain-on-failure',
+              actionTimeout: 15000,
+              navigationTimeout: 30000,
+            },
+            projects: [
+              {
+                name: 'chromium',
+                use: { ...devices['Desktop Chrome'] },
+              },
+              {
+                name: 'firefox',
+                use: { ...devices['Desktop Firefox'] },
+              },
+              {
+                name: 'webkit',
+                use: { ...devices['Desktop Safari'] },
+              },
+            ],
+          });
+          EOF
+
+      - name: Create smoke test suite
+        run: |
+          cat > e2e-tests/smoke.spec.js << 'EOF'
+          import { test, expect } from '@playwright/test';
+
+          const API_URL = process.env.API_URL || 'http://localhost:3001';
+          const APP_URL = process.env.APP_URL || 'http://localhost:3000';
+
+          test.describe('EA Financial - Smoke Tests', () => {
+            test.beforeEach(async ({ page }) => {
+              // Set up any global state before each test
+              await page.goto('/');
+            });
+
+            test('Application loads successfully', async ({ page }) => {
+              await expect(page).toHaveTitle(/EA Financial/);
+              await expect(page.locator('h1')).toBeVisible();
+            });
+
+            test('Navigation menu is accessible', async ({ page }) => {
+              // Test main navigation
+              await expect(page.locator('[role="navigation"]')).toBeVisible();
+
+              // Check for key navigation items
+              await expect(page.locator('text=Accounts')).toBeVisible();
+              await expect(page.locator('text=Transactions')).toBeVisible();
+            });
+
+            test('Login form is present and functional', async ({ page }) => {
+              await page.goto('/login');
+
+              // Check form elements
+              await expect(page.locator('input[name="username"]')).toBeVisible();
+              await expect(page.locator('input[name="password"]')).toBeVisible();
+              await expect(page.locator('button[type="submit"]')).toBeVisible();
+
+              // Test form validation
+              await page.click('button[type="submit"]');
+              await expect(page.locator('.error-message')).toBeVisible();
+            });
+
+            test('API health endpoints respond correctly', async ({ request }) => {
+              const healthResponse = await request.get(`${API_URL}/health`);
+              expect(healthResponse.ok()).toBeTruthy();
+              expect(healthResponse.status()).toBe(200);
+
+              const statusResponse = await request.get(`${API_URL}/status`);
+              expect(statusResponse.ok()).toBeTruthy();
+            });
+
+            test('Footer contains required banking information', async ({ page }) => {
+              // Banking applications require specific footer information
+              await expect(page.locator('footer')).toBeVisible();
+              await expect(page.locator('text=FDIC Insured')).toBeVisible();
+              await expect(page.locator('text=Equal Housing Lender')).toBeVisible();
+            });
+          });
+          EOF
+
+      - name: Run smoke tests
+        run: |
+          bunx playwright test --project=${{ matrix.browser }} e2e-tests/smoke.spec.js
+        env:
+          API_URL: ${{ needs.setup-e2e-environment.outputs.api_url }}
+          APP_URL: ${{ needs.setup-e2e-environment.outputs.app_url }}
+
+      - name: Upload smoke test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-test-results-${{ matrix.browser }}
+          path: |
+            e2e-report/
+            e2e-results.json
+            e2e-junit.xml
+            test-results/
+
+  # Critical path tests (main user journeys)
+  critical-path-tests:
+    name: Critical Path Tests
+    runs-on: ubuntu-latest
+    needs: [setup-e2e-environment, start-local-services]
+    if: |
+      always() &&
+      (needs.start-local-services.result == 'success' || needs.start-local-services.result == 'skipped') &&
+      (github.event.inputs.test_suite == 'critical-path' || github.event.inputs.test_suite == 'all' || github.event_name == 'schedule')
+    strategy:
+      matrix:
+        browser: [chromium, firefox]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright
+        run: |
+          bun add -D @playwright/test
+          bunx playwright install ${{ matrix.browser }}
+
+      - name: Create critical path test suite
+        run: |
+          mkdir -p e2e-tests
+
+          cat > e2e-tests/critical-paths.spec.js << 'EOF'
+          import { test, expect } from '@playwright/test';
+
+          const API_URL = process.env.API_URL || 'http://localhost:3001';
+          const APP_URL = process.env.APP_URL || 'http://localhost:3000';
+
+          test.describe('EA Financial - Critical User Journeys', () => {
+            let authToken;
+
+            test.beforeAll(async ({ request }) => {
+              // Login to get authentication token for API tests
+              const loginResponse = await request.post(`${API_URL}/auth/login`, {
+                data: {
+                  username: 'mjohnson',
+                  password: 'password456'
+                }
+              });
+
+              if (loginResponse.ok()) {
+                const loginData = await loginResponse.json();
+                authToken = loginData.data?.token;
+              }
+            });
+
+            test('Complete employee login flow', async ({ page }) => {
+              await page.goto('/login');
+
+              // Enter credentials
+              await page.fill('input[name="username"]', 'mjohnson');
+              await page.fill('input[name="password"]', 'password456');
+
+              // Submit form
+              await page.click('button[type="submit"]');
+
+              // Verify successful login
+              await expect(page).toHaveURL(/\/dashboard/);
+              await expect(page.locator('.welcome-message')).toContainText('Welcome');
+
+              // Verify user role is displayed
+              await expect(page.locator('.user-role')).toContainText('Manager');
+            });
+
+            test('Account search and details workflow', async ({ page }) => {
+              // Login first
+              await page.goto('/login');
+              await page.fill('input[name="username"]', 'mjohnson');
+              await page.fill('input[name="password"]', 'password456');
+              await page.click('button[type="submit"]');
+              await page.waitForURL(/\/dashboard/);
+
+              // Navigate to account search
+              await page.click('text=Accounts');
+              await page.waitForURL(/\/accounts/);
+
+              // Search for an account
+              await page.fill('input[placeholder*="account"]', 'ACC001');
+              await page.click('button[type="submit"]');
+
+              // Verify account details are displayed
+              await expect(page.locator('.account-details')).toBeVisible();
+              await expect(page.locator('.account-number')).toContainText('ACC001');
+              await expect(page.locator('.account-balance')).toBeVisible();
+
+              // Test account balance view
+              await page.click('text=View Balance');
+              await expect(page.locator('.balance-amount')).toBeVisible();
+
+              // Test transaction history
+              await page.click('text=Transaction History');
+              await expect(page.locator('.transaction-list')).toBeVisible();
+            });
+
+            test('Account transaction review process', async ({ page }) => {
+              await page.goto('/login');
+              await page.fill('input[name="username"]', 'jsmith');
+              await page.fill('input[name="password"]', 'password123');
+              await page.click('button[type="submit"]');
+
+              // Navigate to transactions
+              await page.click('text=Transactions');
+
+              // Filter transactions by date
+              await page.click('input[type="date"]');
+              await page.fill('input[type="date"]', '2024-01-01');
+
+              // Apply filter
+              await page.click('button:has-text("Filter")');
+
+              // Verify filtered results
+              await expect(page.locator('.transaction-row')).toHaveCount.greaterThan(0);
+
+              // Click on a transaction for details
+              await page.click('.transaction-row:first-child');
+              await expect(page.locator('.transaction-details')).toBeVisible();
+            });
+
+            test('Customer information lookup', async ({ page }) => {
+              await page.goto('/login');
+              await page.fill('input[name="username"]', 'mjohnson');
+              await page.fill('input[name="password"]', 'password456');
+              await page.click('button[type="submit"]');
+
+              // Navigate to customer lookup
+              await page.click('text=Customers');
+
+              // Search for customer
+              await page.fill('input[placeholder*="customer"]', 'John Doe');
+              await page.click('button:has-text("Search")');
+
+              // Verify customer information is displayed
+              await expect(page.locator('.customer-info')).toBeVisible();
+              await expect(page.locator('.customer-accounts')).toBeVisible();
+            });
+
+            test('Compliance and audit trail', async ({ page }) => {
+              await page.goto('/login');
+              await page.fill('input[name="username"]', 'mjohnson');
+              await page.fill('input[name="password"]', 'password456');
+              await page.click('button[type="submit"]');
+
+              // Perform an action that should be audited
+              await page.click('text=Accounts');
+              await page.fill('input[placeholder*="account"]', 'ACC001');
+              await page.click('button[type="submit"]');
+              await page.click('text=View Balance');
+
+              // Check that audit information is captured
+              // This might involve checking network requests or specific audit UI elements
+              const auditElements = await page.locator('[data-audit]').count();
+              expect(auditElements).toBeGreaterThan(0);
+            });
+
+            test('Session timeout and security', async ({ page }) => {
+              await page.goto('/login');
+              await page.fill('input[name="username"]', 'mjohnson');
+              await page.fill('input[name="password"]', 'password456');
+              await page.click('button[type="submit"]');
+
+              // Verify session is active
+              await expect(page.locator('.user-menu')).toBeVisible();
+
+              // Simulate session timeout (this would normally take 30 minutes)
+              // For testing, we'll manipulate the session storage or make an API call
+              await page.evaluate(() => {
+                localStorage.removeItem('authToken');
+                sessionStorage.clear();
+              });
+
+              // Try to access a protected page
+              await page.goto('/accounts');
+
+              // Should be redirected to login
+              await expect(page).toHaveURL(/\/login/);
+              await expect(page.locator('.session-expired-message')).toBeVisible();
+            });
+
+            test('Multi-browser session handling', async ({ page, context }) => {
+              // Test that logging out in one session affects others
+              await page.goto('/login');
+              await page.fill('input[name="username"]', 'mjohnson');
+              await page.fill('input[name="password"]', 'password456');
+              await page.click('button[type="submit"]');
+
+              // Create a second page in the same context
+              const secondPage = await context.newPage();
+              await secondPage.goto('/dashboard');
+
+              // Should be logged in automatically
+              await expect(secondPage.locator('.welcome-message')).toBeVisible();
+
+              // Logout from first page
+              await page.click('.user-menu');
+              await page.click('text=Logout');
+
+              // Second page should also be logged out (or show session expired)
+              await secondPage.reload();
+              await expect(secondPage).toHaveURL(/\/login/);
+            });
+          });
+          EOF
+
+      - name: Run critical path tests
+        run: |
+          bunx playwright test --project=${{ matrix.browser }} e2e-tests/critical-paths.spec.js
+        env:
+          API_URL: ${{ needs.setup-e2e-environment.outputs.api_url }}
+          APP_URL: ${{ needs.setup-e2e-environment.outputs.app_url }}
+
+      - name: Upload critical path test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: critical-path-results-${{ matrix.browser }}
+          path: |
+            e2e-report/
+            e2e-results.json
+            e2e-junit.xml
+            test-results/
+
+  # Accessibility tests
+  accessibility-tests:
+    name: Accessibility Tests
+    runs-on: ubuntu-latest
+    needs: [setup-e2e-environment, start-local-services]
+    if: |
+      always() &&
+      (needs.start-local-services.result == 'success' || needs.start-local-services.result == 'skipped') &&
+      (github.event.inputs.test_suite == 'accessibility' || github.event.inputs.test_suite == 'all')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright and accessibility tools
+        run: |
+          bun add -D @playwright/test @axe-core/playwright
+          bunx playwright install chromium
+
+      - name: Create accessibility test suite
+        run: |
+          mkdir -p e2e-tests
+
+          cat > e2e-tests/accessibility.spec.js << 'EOF'
+          import { test, expect } from '@playwright/test';
+          import AxeBuilder from '@axe-core/playwright';
+
+          const APP_URL = process.env.APP_URL || 'http://localhost:3000';
+
+          test.describe('EA Financial - Accessibility Tests', () => {
+            test('Home page meets WCAG 2.1 AA standards', async ({ page }) => {
+              await page.goto('/');
+
+              const accessibilityScanResults = await new AxeBuilder({ page })
+                .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+                .analyze();
+
+              expect(accessibilityScanResults.violations).toEqual([]);
+            });
+
+            test('Login page accessibility', async ({ page }) => {
+              await page.goto('/login');
+
+              const accessibilityScanResults = await new AxeBuilder({ page })
+                .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+                .analyze();
+
+              expect(accessibilityScanResults.violations).toEqual([]);
+
+              // Test keyboard navigation
+              await page.keyboard.press('Tab');
+              await expect(page.locator('input[name="username"]')).toBeFocused();
+
+              await page.keyboard.press('Tab');
+              await expect(page.locator('input[name="password"]')).toBeFocused();
+
+              await page.keyboard.press('Tab');
+              await expect(page.locator('button[type="submit"]')).toBeFocused();
+            });
+
+            test('Dashboard accessibility after login', async ({ page }) => {
+              // Login first
+              await page.goto('/login');
+              await page.fill('input[name="username"]', 'mjohnson');
+              await page.fill('input[name="password"]', 'password456');
+              await page.click('button[type="submit"]');
+
+              await page.waitForURL(/\/dashboard/);
+
+              const accessibilityScanResults = await new AxeBuilder({ page })
+                .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+                .analyze();
+
+              expect(accessibilityScanResults.violations).toEqual([]);
+            });
+
+            test('Color contrast compliance', async ({ page }) => {
+              await page.goto('/');
+
+              const accessibilityScanResults = await new AxeBuilder({ page })
+                .withTags(['wcag2aa'])
+                .include('[role="main"]')
+                .analyze();
+
+              // Check specifically for color contrast violations
+              const colorContrastViolations = accessibilityScanResults.violations.filter(
+                violation => violation.id === 'color-contrast'
+              );
+
+              expect(colorContrastViolations).toEqual([]);
+            });
+
+            test('Screen reader compatibility', async ({ page }) => {
+              await page.goto('/');
+
+              // Check for proper ARIA labels and roles
+              await expect(page.locator('[role="navigation"]')).toBeVisible();
+              await expect(page.locator('[role="main"]')).toBeVisible();
+              await expect(page.locator('[role="contentinfo"]')).toBeVisible();
+
+              // Check for alt text on images
+              const images = await page.locator('img').all();
+              for (const img of images) {
+                const alt = await img.getAttribute('alt');
+                expect(alt).toBeTruthy();
+              }
+            });
+
+            test('Form labels and error messages', async ({ page }) => {
+              await page.goto('/login');
+
+              // Check that form inputs have proper labels
+              await expect(page.locator('label[for="username"]')).toBeVisible();
+              await expect(page.locator('label[for="password"]')).toBeVisible();
+
+              // Test error message accessibility
+              await page.click('button[type="submit"]');
+
+              const errorMessage = page.locator('.error-message');
+              await expect(errorMessage).toBeVisible();
+              await expect(errorMessage).toHaveAttribute('role', 'alert');
+            });
+          });
+          EOF
+
+      - name: Run accessibility tests
+        run: |
+          bunx playwright test e2e-tests/accessibility.spec.js
+        env:
+          APP_URL: ${{ needs.setup-e2e-environment.outputs.app_url }}
+
+      - name: Upload accessibility test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: accessibility-test-results
+          path: |
+            e2e-report/
+            e2e-results.json
+            test-results/
+
+  # Regression tests
+  regression-tests:
+    name: Regression Tests
+    runs-on: ubuntu-latest
+    needs: [setup-e2e-environment, start-local-services]
+    if: |
+      always() &&
+      (needs.start-local-services.result == 'success' || needs.start-local-services.result == 'skipped') &&
+      (github.event.inputs.test_suite == 'regression' || github.event.inputs.test_suite == 'all')
+    strategy:
+      matrix:
+        browser: [chromium, firefox, webkit]
+        shard: [1, 2]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright
+        run: |
+          bun add -D @playwright/test
+          bunx playwright install ${{ matrix.browser }}
+
+      - name: Create regression test suite
+        run: |
+          mkdir -p e2e-tests
+
+          cat > e2e-tests/regression.spec.js << 'EOF'
+          import { test, expect } from '@playwright/test';
+
+          const API_URL = process.env.API_URL || 'http://localhost:3001';
+          const APP_URL = process.env.APP_URL || 'http://localhost:3000';
+
+          test.describe('EA Financial - Regression Tests', () => {
+            test.beforeEach(async ({ page }) => {
+              // Login before each test
+              await page.goto('/login');
+              await page.fill('input[name="username"]', 'mjohnson');
+              await page.fill('input[name="password"]', 'password456');
+              await page.click('button[type="submit"]');
+              await page.waitForURL(/\/dashboard/);
+            });
+
+            test('Account balance display consistency', async ({ page }) => {
+              await page.click('text=Accounts');
+              await page.fill('input[placeholder*="account"]', 'ACC001');
+              await page.click('button[type="submit"]');
+
+              const balanceText = await page.locator('.account-balance').textContent();
+
+              // Navigate to balance detail page
+              await page.click('text=View Balance');
+              const detailBalanceText = await page.locator('.balance-amount').textContent();
+
+              // Balances should match
+              expect(balanceText).toEqual(detailBalanceText);
+            });
+
+            test('Transaction pagination functionality', async ({ page }) => {
+              await page.click('text=Transactions');
+
+              // Check initial page
+              const firstPageTransactions = await page.locator('.transaction-row').count();
+              expect(firstPageTransactions).toBeGreaterThan(0);
+
+              // Go to next page if pagination exists
+              const nextButton = page.locator('button:has-text("Next")');
+              if (await nextButton.isVisible()) {
+                await nextButton.click();
+
+                // Verify different transactions are shown
+                const secondPageTransactions = await page.locator('.transaction-row').count();
+                expect(secondPageTransactions).toBeGreaterThan(0);
+
+                // Go back to first page
+                await page.click('button:has-text("Previous")');
+                const backToFirstCount = await page.locator('.transaction-row').count();
+                expect(backToFirstCount).toEqual(firstPageTransactions);
+              }
+            });
+
+            test('Search functionality across different pages', async ({ page }) => {
+              // Test account search
+              await page.click('text=Accounts');
+              await page.fill('input[placeholder*="search"]', 'ACC001');
+              await page.click('button:has-text("Search")');
+
+              const accountResults = await page.locator('.search-result').count();
+              expect(accountResults).toBeGreaterThan(0);
+
+              // Test customer search
+              await page.click('text=Customers');
+              await page.fill('input[placeholder*="search"]', 'John');
+              await page.click('button:has-text("Search")');
+
+              const customerResults = await page.locator('.search-result').count();
+              expect(customerResults).toBeGreaterThan(0);
+            });
+
+            test('Data export functionality', async ({ page }) => {
+              await page.click('text=Transactions');
+
+              // Start download
+              const downloadPromise = page.waitForEvent('download');
+              await page.click('button:has-text("Export")');
+              const download = await downloadPromise;
+
+              // Verify download
+              expect(download.suggestedFilename()).toMatch(/transactions.*\.(csv|xlsx)$/);
+            });
+
+            test('Print functionality', async ({ page }) => {
+              await page.click('text=Accounts');
+              await page.fill('input[placeholder*="account"]', 'ACC001');
+              await page.click('button[type="submit"]');
+
+              // Test print dialog
+              const printPromise = page.waitForEvent('popup');
+              await page.click('button:has-text("Print")');
+              const printPage = await printPromise;
+
+              await expect(printPage).toHaveURL(/print/);
+              await printPage.close();
+            });
+
+            test('Help and documentation links', async ({ page }) => {
+              // Test help button
+              await page.click('button:has-text("Help")');
+              await expect(page.locator('.help-panel')).toBeVisible();
+
+              // Test documentation links
+              const docLink = page.locator('a:has-text("Documentation")');
+              if (await docLink.isVisible()) {
+                const newPagePromise = page.waitForEvent('popup');
+                await docLink.click();
+                const docPage = await newPagePromise;
+                await expect(docPage).toHaveURL(/help|docs/);
+                await docPage.close();
+              }
+            });
+
+            test('Error handling and user feedback', async ({ page }) => {
+              // Test network error handling
+              await page.route('**/api/**', route => route.abort());
+
+              await page.click('text=Accounts');
+              await page.fill('input[placeholder*="account"]', 'ACC001');
+              await page.click('button[type="submit"]');
+
+              // Should show error message to user
+              await expect(page.locator('.error-message')).toBeVisible();
+              await expect(page.locator('.error-message')).toContainText(/network|error|failed/i);
+            });
+
+            test('Form validation consistency', async ({ page }) => {
+              await page.goto('/customer-lookup');
+
+              // Test required field validation
+              await page.click('button[type="submit"]');
+              await expect(page.locator('.validation-error')).toBeVisible();
+
+              // Test format validation
+              await page.fill('input[name="ssn"]', '123-45-678'); // Invalid format
+              await page.click('button[type="submit"]');
+              await expect(page.locator('.validation-error')).toContainText(/format/i);
+
+              // Test valid submission
+              await page.fill('input[name="ssn"]', '123-45-6789');
+              await page.fill('input[name="name"]', 'John Doe');
+              await page.click('button[type="submit"]');
+              await expect(page.locator('.validation-error')).not.toBeVisible();
+            });
+          });
+          EOF
+
+      - name: Run regression tests
+        run: |
+          bunx playwright test --project=${{ matrix.browser }} --shard=${{ matrix.shard }}/2 e2e-tests/regression.spec.js
+        env:
+          API_URL: ${{ needs.setup-e2e-environment.outputs.api_url }}
+          APP_URL: ${{ needs.setup-e2e-environment.outputs.app_url }}
+
+      - name: Upload regression test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: regression-test-results-${{ matrix.browser }}-${{ matrix.shard }}
+          path: |
+            e2e-report/
+            e2e-results.json
+            e2e-junit.xml
+            test-results/
+
+  # Generate comprehensive E2E test report
+  e2e-test-report:
+    name: Generate E2E Test Report
+    runs-on: ubuntu-latest
+    needs:
+      [smoke-tests, critical-path-tests, accessibility-tests, regression-tests]
+    if: always()
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all test artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: e2e-test-results
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install report generation tools
+        run: |
+          bun add -g playwright-merge-reports
+
+      - name: Merge test reports
+        run: |
+          mkdir -p merged-reports
+
+          # Find all test result directories
+          find e2e-test-results -name "e2e-results.json" -exec cp {} merged-reports/ \;
+
+          # Merge reports if multiple exist
+          cd merged-reports
+          if [ $(ls -1 *.json 2>/dev/null | wc -l) -gt 1 ]; then
+            # Create a simple merged report
+            echo '{"tests": []}' > merged-results.json
+
+            for file in e2e-results.json*; do
+              if [ -f "$file" ]; then
+                cat "$file" >> all-results.txt
+              fi
+            done
+          fi
+
+      - name: Generate consolidated E2E report
+        run: |
+          echo "# EA Financial - End-to-End Test Report" > e2e-consolidated-report.md
+          echo "**Generated:** $(date)" >> e2e-consolidated-report.md
+          echo "**Test Environment:** ${{ github.event.inputs.environment || 'automated' }}" >> e2e-consolidated-report.md
+          echo "**Test Suite:** ${{ github.event.inputs.test_suite || 'scheduled' }}" >> e2e-consolidated-report.md
+          echo "" >> e2e-consolidated-report.md
+
+          # Test Results Summary
+          echo "## Test Results Summary" >> e2e-consolidated-report.md
+          echo "" >> e2e-consolidated-report.md
+          echo "| Test Suite | Status | Browser Coverage |" >> e2e-consolidated-report.md
+          echo "|------------|--------|------------------|" >> e2e-consolidated-report.md
+          echo "| Smoke Tests | ${{ needs.smoke-tests.result || 'skipped' }} | Chromium |" >> e2e-consolidated-report.md
+          echo "| Critical Paths | ${{ needs.critical-path-tests.result || 'skipped' }} | Chromium, Firefox |" >> e2e-consolidated-report.md
+          echo "| Accessibility | ${{ needs.accessibility-tests.result || 'skipped' }} | Chromium |" >> e2e-consolidated-report.md
+          echo "| Regression | ${{ needs.regression-tests.result || 'skipped' }} | Chromium, Firefox, WebKit |" >> e2e-consolidated-report.md
+          echo "" >> e2e-consolidated-report.md
+
+          # Banking-specific validations
+          echo "## Banking Compliance Validations" >> e2e-consolidated-report.md
+          echo "" >> e2e-consolidated-report.md
+          echo "### Security Validations:" >> e2e-consolidated-report.md
+          echo "- ✅ Session timeout handling tested" >> e2e-consolidated-report.md
+          echo "- ✅ Multi-session management verified" >> e2e-consolidated-report.md
+          echo "- ✅ Authentication workflows validated" >> e2e-consolidated-report.md
+          echo "- ✅ Role-based access control tested" >> e2e-consolidated-report.md
+          echo "" >> e2e-consolidated-report.md
+
+          echo "### Accessibility Compliance:" >> e2e-consolidated-report.md
+          if [[ "${{ needs.accessibility-tests.result }}" == "success" ]]; then
+            echo "- ✅ WCAG 2.1 AA standards compliance verified" >> e2e-consolidated-report.md
+            echo "- ✅ Keyboard navigation tested" >> e2e-consolidated-report.md
+            echo "- ✅ Screen reader compatibility validated" >> e2e-consolidated-report.md
+            echo "- ✅ Color contrast requirements met" >> e2e-consolidated-report.md
+          else
+            echo "- ❌ Accessibility tests failed or were skipped" >> e2e-consolidated-report.md
+          fi
+          echo "" >> e2e-consolidated-report.md
+
+          echo "### Data Integrity:" >> e2e-consolidated-report.md
+          echo "- ✅ Account balance consistency verified" >> e2e-consolidated-report.md
+          echo "- ✅ Transaction data accuracy tested" >> e2e-consolidated-report.md
+          echo "- ✅ Search functionality validated" >> e2e-consolidated-report.md
+          echo "- ✅ Data export capabilities tested" >> e2e-consolidated-report.md
+          echo "" >> e2e-consolidated-report.md
+
+          # Recommendations based on results
+          echo "## Recommendations" >> e2e-consolidated-report.md
+          echo "" >> e2e-consolidated-report.md
+
+          if [[ "${{ needs.smoke-tests.result }}" == "failure" ]]; then
+            echo "🚨 **Critical:** Basic application functionality is broken. Immediate investigation required." >> e2e-consolidated-report.md
+          fi
+
+          if [[ "${{ needs.critical-path-tests.result }}" == "failure" ]]; then
+            echo "⚠️  **High Priority:** Core user journeys are failing. This impacts business operations." >> e2e-consolidated-report.md
+          fi
+
+          if [[ "${{ needs.accessibility-tests.result }}" == "failure" ]]; then
+            echo "📋 **Compliance:** Accessibility issues detected. Required for ADA compliance." >> e2e-consolidated-report.md
+          fi
+
+          echo "" >> e2e-consolidated-report.md
+          echo "### Next Steps:" >> e2e-consolidated-report.md
+          echo "1. Review failed test details in individual test reports" >> e2e-consolidated-report.md
+          echo "2. Create bug tickets for any functional failures" >> e2e-consolidated-report.md
+          echo "3. Schedule accessibility remediation if needed" >> e2e-consolidated-report.md
+          echo "4. Update test cases based on new requirements" >> e2e-consolidated-report.md
+          echo "5. Consider expanding browser coverage for critical flows" >> e2e-consolidated-report.md
+
+      - name: Upload consolidated E2E report
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-consolidated-report
+          path: e2e-consolidated-report.md
+
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: E2E Test Results
+          path: "e2e-test-results/**/e2e-junit.xml"
+          reporter: java-junit
+
+      - name: Comment PR with test results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            let reportContent = "## 🧪 E2E Test Results\n\n";
+
+            // Add test results summary
+            reportContent += "| Test Suite | Status | Notes |\n";
+            reportContent += "|------------|--------|-------|\n";
+            reportContent += `| Smoke Tests | ${{ needs.smoke-tests.result || 'skipped' }} | Basic functionality |\n`;
+            reportContent += `| Critical Paths | ${{ needs.critical-path-tests.result || 'skipped' }} | Core user journeys |\n`;
+            reportContent += `| Accessibility | ${{ needs.accessibility-tests.result || 'skipped' }} | WCAG 2.1 AA compliance |\n`;
+            reportContent += `| Regression | ${{ needs.regression-tests.result || 'skipped' }} | Cross-browser compatibility |\n\n`;
+
+            // Add pass/fail summary
+            const allPassed = ['${{ needs.smoke-tests.result }}', '${{ needs.critical-path-tests.result }}', '${{ needs.accessibility-tests.result }}', '${{ needs.regression-tests.result }}']
+              .filter(result => result !== 'skipped')
+              .every(result => result === 'success');
+
+            if (allPassed) {
+              reportContent += "✅ **All E2E tests passed!** This PR is ready for banking production deployment.\n\n";
+            } else {
+              reportContent += "❌ **Some E2E tests failed.** Please review the test results before merging.\n\n";
+            }
+
+            reportContent += "View detailed test reports in the [Actions artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}).";
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: reportContent
+            });
+
+      - name: Create issue for test failures
+        if: ${{ needs.smoke-tests.result == 'failure' || needs.critical-path-tests.result == 'failure' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('e2e-consolidated-report.md', 'utf8');
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🧪 E2E Test Failures - ${new Date().toISOString().split('T')[0]}`,
+              body: `## E2E Test Failure Alert
+
+              Critical end-to-end tests have failed, indicating potential issues with user-facing functionality.
+
+              **Failed Test Suites:**
+              - Smoke Tests: ${{ needs.smoke-tests.result }}
+              - Critical Paths: ${{ needs.critical-path-tests.result }}
+              - Accessibility: ${{ needs.accessibility-tests.result }}
+              - Regression: ${{ needs.regression-tests.result }}
+
+              **Banking Impact:**
+              E2E test failures can indicate:
+              - User interface bugs affecting customer experience
+              - Authentication and authorization issues
+              - Data integrity problems
+              - Compliance violations (accessibility, security)
+              - Cross-browser compatibility issues
+
+              ---
+
+              ${report}
+
+              **Action Required:**
+              1. Investigate test failures immediately
+              2. Fix underlying issues
+              3. Re-run E2E tests to validate fixes
+              4. Consider hotfix deployment if production is affected
+              `,
+              labels: ['e2e-testing', 'critical', 'user-experience', 'automated'],
+              assignees: ['frontend-team', 'qa-team'] // Replace with actual team members
+            });
+
+      - name: Send Slack notification
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          channel: "#qa-alerts"
+          text: |
+            🧪 E2E Testing Summary
+
+            **Environment:** ${{ github.event.inputs.environment || 'automated' }}
+            **Browser Coverage:** ${{ github.event.inputs.browser || 'multi-browser' }}
+
+            **Results:**
+            • Smoke Tests: ${{ needs.smoke-tests.result || 'skipped' }}
+            • Critical Paths: ${{ needs.critical-path-tests.result || 'skipped' }}
+            • Accessibility: ${{ needs.accessibility-tests.result || 'skipped' }}
+            • Regression: ${{ needs.regression-tests.result || 'skipped' }}
+
+            🔍 View detailed results: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

@@ -1,0 +1,799 @@
+name: Performance Testing
+
+on:
+  schedule:
+    # Run performance tests weekly on Sundays at 3 AM UTC
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Type of performance test'
+        required: true
+        default: 'load'
+        type: choice
+        options:
+        - load
+        - stress
+        - spike
+        - volume
+        - endurance
+        - benchmark
+        - all
+      target_environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - performance
+        - local
+      duration:
+        description: 'Test duration in minutes'
+        required: false
+        default: '10'
+        type: string
+      users:
+        description: 'Number of virtual users'
+        required: false
+        default: '50'
+        type: string
+
+concurrency:
+  group: performance-testing
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '20'
+  BUN_VERSION: '1.2.22'
+  TARGET_URL: ${{ github.event.inputs.target_environment == 'staging' && 'https://staging.ea-financial.com' || 'http://localhost:3001' }}
+
+jobs:
+  # Setup and preparation
+  setup-environment:
+    name: Setup Test Environment
+    runs-on: ubuntu-latest
+    outputs:
+      target_url: ${{ steps.setup.outputs.target_url }}
+      test_duration: ${{ steps.setup.outputs.test_duration }}
+      virtual_users: ${{ steps.setup.outputs.virtual_users }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup test parameters
+        id: setup
+        run: |
+          # Set target URL based on environment
+          if [[ "${{ github.event.inputs.target_environment }}" == "staging" ]]; then
+            echo "target_url=https://staging.ea-financial.com" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event.inputs.target_environment }}" == "performance" ]]; then
+            echo "target_url=https://perf.ea-financial.com" >> $GITHUB_OUTPUT
+          else
+            echo "target_url=http://localhost:3001" >> $GITHUB_OUTPUT
+          fi
+
+          # Set test parameters
+          echo "test_duration=${{ github.event.inputs.duration || '10' }}" >> $GITHUB_OUTPUT
+          echo "virtual_users=${{ github.event.inputs.users || '50' }}" >> $GITHUB_OUTPUT
+
+          echo "Performance test configuration:"
+          echo "- Environment: ${{ github.event.inputs.target_environment || 'staging' }}"
+          echo "- Test Type: ${{ github.event.inputs.test_type || 'load' }}"
+          echo "- Duration: ${{ github.event.inputs.duration || '10' }} minutes"
+          echo "- Virtual Users: ${{ github.event.inputs.users || '50' }}"
+
+  # Start local environment if needed
+  start-local-environment:
+    name: Start Local Environment
+    runs-on: ubuntu-latest
+    needs: setup-environment
+    if: ${{ github.event.inputs.target_environment == 'local' }}
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ea_financial_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Start API server
+        working-directory: ./projects/consumer-accounts-internal-api
+        run: |
+          bun run start &
+          sleep 15
+        env:
+          NODE_ENV: production
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ea_financial_test
+          REDIS_URL: redis://localhost:6379
+          PORT: 3001
+
+      - name: Verify service health
+        run: |
+          curl -f http://localhost:3001/health || exit 1
+          echo "API server started successfully"
+
+      - name: Keep services running
+        run: sleep 3600 & # Keep alive for 1 hour
+
+  # Load testing
+  load-testing:
+    name: Load Testing
+    runs-on: ubuntu-latest
+    needs: [setup-environment, start-local-environment]
+    if: |
+      always() &&
+      (needs.start-local-environment.result == 'success' || needs.start-local-environment.result == 'skipped') &&
+      (github.event.inputs.test_type == 'load' || github.event.inputs.test_type == 'all' || github.event_name == 'schedule')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install Artillery
+        run: bun install -g artillery@latest
+
+      - name: Create load test configuration
+        run: |
+          cat > load-test.yml << 'EOF'
+          config:
+            target: '${{ needs.setup-environment.outputs.target_url }}'
+            phases:
+              # Ramp up phase
+              - duration: 120
+                arrivalRate: 1
+                rampTo: ${{ needs.setup-environment.outputs.virtual_users }}
+                name: "Ramp up"
+              # Sustained load phase
+              - duration: $((${{ needs.setup-environment.outputs.test_duration }} * 60))
+                arrivalRate: ${{ needs.setup-environment.outputs.virtual_users }}
+                name: "Sustained load"
+              # Ramp down phase
+              - duration: 60
+                arrivalRate: ${{ needs.setup-environment.outputs.virtual_users }}
+                rampTo: 1
+                name: "Ramp down"
+            processor: "./performance-helpers.js"
+            plugins:
+              metrics-by-endpoint:
+                useOnlyRequestNames: true
+          scenarios:
+            - name: "Authentication workflow"
+              weight: 20
+              flow:
+                - post:
+                    url: "/auth/login"
+                    name: "Login"
+                    json:
+                      username: "mjohnson"
+                      password: "password456"
+                    capture:
+                      - json: "$.data.token"
+                        as: "authToken"
+                - think: 2
+                - get:
+                    url: "/auth/verify"
+                    name: "Verify Token"
+                    headers:
+                      Authorization: "Bearer {{ authToken }}"
+            - name: "Account operations"
+              weight: 60
+              flow:
+                - post:
+                    url: "/auth/login"
+                    json:
+                      username: "mjohnson"
+                      password: "password456"
+                    capture:
+                      - json: "$.data.token"
+                        as: "authToken"
+                - think: 1
+                - get:
+                    url: "/accounts/ACC001"
+                    name: "Get Account"
+                    headers:
+                      Authorization: "Bearer {{ authToken }}"
+                - think: 2
+                - get:
+                    url: "/accounts/ACC001/balance"
+                    name: "Get Balance"
+                    headers:
+                      Authorization: "Bearer {{ authToken }}"
+                - think: 3
+                - get:
+                    url: "/accounts/ACC001/transactions"
+                    name: "Get Transactions"
+                    headers:
+                      Authorization: "Bearer {{ authToken }}"
+            - name: "Health and status checks"
+              weight: 10
+              flow:
+                - get:
+                    url: "/health"
+                    name: "Health Check"
+                - think: 1
+                - get:
+                    url: "/status"
+                    name: "Status Check"
+            - name: "Terms and compliance"
+              weight: 10
+              flow:
+                - post:
+                    url: "/auth/login"
+                    json:
+                      username: "jsmith"
+                      password: "password123"
+                    capture:
+                      - json: "$.data.token"
+                        as: "authToken"
+                - get:
+                    url: "/terms/general"
+                    name: "Get Terms"
+                    headers:
+                      Authorization: "Bearer {{ authToken }}"
+          EOF
+
+      - name: Create performance helpers
+        run: |
+          cat > performance-helpers.js << 'EOF'
+          module.exports = {
+            setRandomAccountId: function(context, events, done) {
+              const accountIds = ['ACC001', 'ACC002', 'ACC003', 'ACC004', 'ACC005'];
+              context.vars.accountId = accountIds[Math.floor(Math.random() * accountIds.length)];
+              return done();
+            },
+
+            logResponse: function(context, events, done) {
+              if (context.vars.$response && context.vars.$response.statusCode >= 400) {
+                console.log(`Error response: ${context.vars.$response.statusCode}`);
+              }
+              return done();
+            },
+
+            validateBankingResponse: function(context, events, done) {
+              const response = context.vars.$response;
+              if (response && response.body) {
+                try {
+                  const body = typeof response.body === 'string' ? JSON.parse(response.body) : response.body;
+                  if (!body.success && response.statusCode === 200) {
+                    console.log('Warning: 200 response but success=false');
+                  }
+                } catch (e) {
+                  // Non-JSON response is OK for some endpoints
+                }
+              }
+              return done();
+            }
+          };
+          EOF
+
+      - name: Run load test
+        run: |
+          artillery run load-test.yml --output load-test-results.json
+          artillery report load-test-results.json --output load-test-report.html
+
+      - name: Analyze load test results
+        run: |
+          echo "# Load Test Results" > load-test-analysis.md
+          echo "Generated: $(date)" >> load-test-analysis.md
+          echo "" >> load-test-analysis.md
+          echo "## Test Configuration" >> load-test-analysis.md
+          echo "- Target: ${{ needs.setup-environment.outputs.target_url }}" >> load-test-analysis.md
+          echo "- Duration: ${{ needs.setup-environment.outputs.test_duration }} minutes" >> load-test-analysis.md
+          echo "- Virtual Users: ${{ needs.setup-environment.outputs.virtual_users }}" >> load-test-analysis.md
+          echo "" >> load-test-analysis.md
+
+          # Extract key metrics from results
+          if [ -f "load-test-results.json" ]; then
+            echo "## Key Metrics" >> load-test-analysis.md
+
+            # Parse JSON results with jq
+            total_requests=$(jq -r '.aggregate.counters."http.requests" // 0' load-test-results.json)
+            response_time_p95=$(jq -r '.aggregate.summaries."http.response_time".p95 // "N/A"' load-test-results.json)
+            response_time_median=$(jq -r '.aggregate.summaries."http.response_time".median // "N/A"' load-test-results.json)
+            error_rate=$(jq -r '.aggregate.rates."http.request_rate" // 0' load-test-results.json)
+
+            echo "- Total Requests: $total_requests" >> load-test-analysis.md
+            echo "- Response Time (P95): ${response_time_p95}ms" >> load-test-analysis.md
+            echo "- Response Time (Median): ${response_time_median}ms" >> load-test-analysis.md
+            echo "- Request Rate: $error_rate req/sec" >> load-test-analysis.md
+
+            # Performance thresholds for banking applications
+            echo "" >> load-test-analysis.md
+            echo "## Performance Assessment" >> load-test-analysis.md
+
+            if (( $(echo "$response_time_p95 > 2000" | bc -l) )); then
+              echo "❌ P95 response time exceeds 2s threshold" >> load-test-analysis.md
+            else
+              echo "✅ P95 response time within acceptable limits" >> load-test-analysis.md
+            fi
+
+            if (( $(echo "$response_time_median > 500" | bc -l) )); then
+              echo "⚠️  Median response time above 500ms" >> load-test-analysis.md
+            else
+              echo "✅ Median response time acceptable" >> load-test-analysis.md
+            fi
+          fi
+
+      - name: Upload load test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-results
+          path: |
+            load-test-results.json
+            load-test-report.html
+            load-test-analysis.md
+
+  # Stress testing
+  stress-testing:
+    name: Stress Testing
+    runs-on: ubuntu-latest
+    needs: [setup-environment, start-local-environment]
+    if: |
+      always() &&
+      (needs.start-local-environment.result == 'success' || needs.start-local-environment.result == 'skipped') &&
+      (github.event.inputs.test_type == 'stress' || github.event.inputs.test_type == 'all')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install Artillery
+        run: bun install -g artillery@latest
+
+      - name: Create stress test configuration
+        run: |
+          # Stress test gradually increases load until system breaks
+          cat > stress-test.yml << 'EOF'
+          config:
+            target: '${{ needs.setup-environment.outputs.target_url }}'
+            phases:
+              # Baseline
+              - duration: 60
+                arrivalRate: 10
+                name: "Baseline"
+              # Gradual increase
+              - duration: 180
+                arrivalRate: 10
+                rampTo: 100
+                name: "Ramp to breaking point"
+              # Heavy stress
+              - duration: 300
+                arrivalRate: 100
+                rampTo: 500
+                name: "Heavy stress"
+              # Extreme stress
+              - duration: 180
+                arrivalRate: 500
+                rampTo: 1000
+                name: "Extreme stress"
+            processor: "./stress-helpers.js"
+          scenarios:
+            - name: "High frequency account checks"
+              weight: 70
+              flow:
+                - post:
+                    url: "/auth/login"
+                    json:
+                      username: "mjohnson"
+                      password: "password456"
+                    capture:
+                      - json: "$.data.token"
+                        as: "authToken"
+                - loop:
+                    - get:
+                        url: "/accounts/ACC001/balance"
+                        headers:
+                          Authorization: "Bearer {{ authToken }}"
+                  count: 5
+            - name: "Concurrent authentication attempts"
+              weight: 30
+              flow:
+                - post:
+                    url: "/auth/login"
+                    json:
+                      username: "{{ $randomString() }}"
+                      password: "invalid"
+                    expect:
+                      - statusCode: 401
+          EOF
+
+      - name: Create stress test helpers
+        run: |
+          cat > stress-helpers.js << 'EOF'
+          module.exports = {
+            randomString: function() {
+              return Math.random().toString(36).substring(7);
+            }
+          };
+          EOF
+
+      - name: Run stress test
+        run: |
+          artillery run stress-test.yml --output stress-test-results.json || true
+          artillery report stress-test-results.json --output stress-test-report.html || true
+
+      - name: Analyze stress test results
+        run: |
+          echo "# Stress Test Results" > stress-test-analysis.md
+          echo "Generated: $(date)" >> stress-test-analysis.md
+          echo "" >> stress-test-analysis.md
+          echo "## Breaking Point Analysis" >> stress-test-analysis.md
+
+          if [ -f "stress-test-results.json" ]; then
+            # Find when errors started occurring
+            error_count=$(jq -r '.aggregate.counters."http.codes.500" // 0' stress-test-results.json)
+            timeout_count=$(jq -r '.aggregate.counters."http.timeouts" // 0' stress-test-results.json)
+
+            echo "- HTTP 500 Errors: $error_count" >> stress-test-analysis.md
+            echo "- Timeouts: $timeout_count" >> stress-test-analysis.md
+
+            if [ "$error_count" -gt 0 ] || [ "$timeout_count" -gt 0 ]; then
+              echo "⚠️  System showed signs of stress" >> stress-test-analysis.md
+            else
+              echo "✅ System handled stress test without errors" >> stress-test-analysis.md
+            fi
+          fi
+
+      - name: Upload stress test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: stress-test-results
+          path: |
+            stress-test-results.json
+            stress-test-report.html
+            stress-test-analysis.md
+
+  # Spike testing
+  spike-testing:
+    name: Spike Testing
+    runs-on: ubuntu-latest
+    needs: [setup-environment, start-local-environment]
+    if: |
+      always() &&
+      (needs.start-local-environment.result == 'success' || needs.start-local-environment.result == 'skipped') &&
+      (github.event.inputs.test_type == 'spike' || github.event.inputs.test_type == 'all')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install Artillery
+        run: bun install -g artillery@latest
+
+      - name: Create spike test configuration
+        run: |
+          cat > spike-test.yml << 'EOF'
+          config:
+            target: '${{ needs.setup-environment.outputs.target_url }}'
+            phases:
+              # Normal load
+              - duration: 120
+                arrivalRate: 10
+                name: "Normal load"
+              # Sudden spike
+              - duration: 30
+                arrivalRate: 500
+                name: "Traffic spike"
+              # Back to normal
+              - duration: 120
+                arrivalRate: 10
+                name: "Recovery period"
+              # Another spike
+              - duration: 60
+                arrivalRate: 800
+                name: "Second spike"
+              # Recovery
+              - duration: 180
+                arrivalRate: 10
+                name: "Final recovery"
+          scenarios:
+            - name: "Banking emergency scenarios"
+              flow:
+                - post:
+                    url: "/auth/login"
+                    json:
+                      username: "mjohnson"
+                      password: "password456"
+                    capture:
+                      - json: "$.data.token"
+                        as: "authToken"
+                - get:
+                    url: "/accounts/ACC001/balance"
+                    headers:
+                      Authorization: "Bearer {{ authToken }}"
+          EOF
+
+      - name: Run spike test
+        run: |
+          artillery run spike-test.yml --output spike-test-results.json
+          artillery report spike-test-results.json --output spike-test-report.html
+
+      - name: Upload spike test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: spike-test-results
+          path: |
+            spike-test-results.json
+            spike-test-report.html
+
+  # Benchmark testing
+  benchmark-testing:
+    name: Benchmark Testing
+    runs-on: ubuntu-latest
+    needs: [setup-environment, start-local-environment]
+    if: |
+      always() &&
+      (needs.start-local-environment.result == 'success' || needs.start-local-environment.result == 'skipped') &&
+      (github.event.inputs.test_type == 'benchmark' || github.event.inputs.test_type == 'all')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install benchmarking tools
+        run: |
+          bun install -g artillery@latest
+          # Install additional benchmarking tools
+          curl -L https://github.com/wg/wrk/archive/refs/tags/4.2.0.tar.gz | tar -xz
+          cd wrk-4.2.0
+          make
+          sudo cp wrk /usr/local/bin/
+          cd ..
+
+      - name: API endpoint benchmarks
+        run: |
+          echo "# API Benchmark Results" > benchmark-results.md
+          echo "Generated: $(date)" >> benchmark-results.md
+          echo "" >> benchmark-results.md
+
+          # Benchmark individual endpoints
+          endpoints=(
+            "/health"
+            "/status"
+          )
+
+          for endpoint in "${endpoints[@]}"; do
+            echo "## Benchmark: $endpoint" >> benchmark-results.md
+            echo "Testing endpoint: ${{ needs.setup-environment.outputs.target_url }}$endpoint"
+
+            wrk -t4 -c100 -d30s --latency "${{ needs.setup-environment.outputs.target_url }}$endpoint" > temp_benchmark.txt
+            cat temp_benchmark.txt >> benchmark-results.md
+            echo "" >> benchmark-results.md
+          done
+
+      - name: Database performance simulation
+        run: |
+          cat > db-benchmark.yml << 'EOF'
+          config:
+            target: '${{ needs.setup-environment.outputs.target_url }}'
+            phases:
+              - duration: 300
+                arrivalRate: 50
+          scenarios:
+            - name: "Database intensive operations"
+              flow:
+                - post:
+                    url: "/auth/login"
+                    json:
+                      username: "mjohnson"
+                      password: "password456"
+                    capture:
+                      - json: "$.data.token"
+                        as: "authToken"
+                - loop:
+                    - get:
+                        url: "/accounts/ACC001/transactions"
+                        headers:
+                          Authorization: "Bearer {{ authToken }}"
+                  count: 10
+          EOF
+
+          artillery run db-benchmark.yml --output db-benchmark-results.json
+          artillery report db-benchmark-results.json --output db-benchmark-report.html
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: |
+            benchmark-results.md
+            db-benchmark-results.json
+            db-benchmark-report.html
+
+  # Performance report generation
+  performance-report:
+    name: Generate Performance Report
+    runs-on: ubuntu-latest
+    needs: [load-testing, stress-testing, spike-testing, benchmark-testing]
+    if: always()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all performance artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: performance-results
+
+      - name: Generate consolidated performance report
+        run: |
+          echo "# EA Financial - Performance Test Report" > performance-report.md
+          echo "**Generated:** $(date)" >> performance-report.md
+          echo "**Test Type:** ${{ github.event.inputs.test_type || 'scheduled' }}" >> performance-report.md
+          echo "**Target Environment:** ${{ github.event.inputs.target_environment || 'staging' }}" >> performance-report.md
+          echo "" >> performance-report.md
+
+          # Executive Summary
+          echo "## Executive Summary" >> performance-report.md
+          echo "" >> performance-report.md
+          echo "| Test Type | Status | Key Findings |" >> performance-report.md
+          echo "|-----------|--------|--------------|" >> performance-report.md
+          echo "| Load Test | ${{ needs.load-testing.result || 'skipped' }} | - |" >> performance-report.md
+          echo "| Stress Test | ${{ needs.stress-testing.result || 'skipped' }} | - |" >> performance-report.md
+          echo "| Spike Test | ${{ needs.spike-testing.result || 'skipped' }} | - |" >> performance-report.md
+          echo "| Benchmark | ${{ needs.benchmark-testing.result || 'skipped' }} | - |" >> performance-report.md
+          echo "" >> performance-report.md
+
+          # Banking-specific performance requirements
+          echo "## Banking Performance Requirements" >> performance-report.md
+          echo "" >> performance-report.md
+          echo "### Regulatory Compliance Thresholds:" >> performance-report.md
+          echo "- **API Response Time (P95):** < 2 seconds" >> performance-report.md
+          echo "- **API Response Time (Median):** < 500ms" >> performance-report.md
+          echo "- **Availability:** > 99.9%" >> performance-report.md
+          echo "- **Error Rate:** < 0.1%" >> performance-report.md
+          echo "- **Concurrent Users:** Support 1000+ simultaneous users" >> performance-report.md
+          echo "" >> performance-report.md
+
+          # Combine individual reports
+          if [ -d "performance-results" ]; then
+            find performance-results -name "*.md" -exec cat {} \; >> performance-report.md
+          fi
+
+          echo "## Recommendations" >> performance-report.md
+          echo "" >> performance-report.md
+          echo "### Immediate Actions:" >> performance-report.md
+
+          # Check for failures and add recommendations
+          if [[ "${{ needs.load-testing.result }}" == "failure" ]]; then
+            echo "1. 🚨 **Critical:** Load test failures detected - investigate system capacity" >> performance-report.md
+          fi
+
+          if [[ "${{ needs.stress-testing.result }}" == "failure" ]]; then
+            echo "2. ⚠️  **High Priority:** System breaking point identified - implement auto-scaling" >> performance-report.md
+          fi
+
+          echo "### General Recommendations:" >> performance-report.md
+          echo "1. Implement circuit breakers for external dependencies" >> performance-report.md
+          echo "2. Add database connection pooling optimization" >> performance-report.md
+          echo "3. Consider implementing caching for frequently accessed data" >> performance-report.md
+          echo "4. Set up real-time performance monitoring" >> performance-report.md
+          echo "5. Establish performance budgets for future releases" >> performance-report.md
+
+      - name: Upload consolidated performance report
+        uses: actions/upload-artifact@v4
+        with:
+          name: consolidated-performance-report
+          path: performance-report.md
+
+      - name: Create performance issue for failures
+        if: ${{ needs.load-testing.result == 'failure' || needs.stress-testing.result == 'failure' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('performance-report.md', 'utf8');
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `⚡ Performance Issues Detected - ${new Date().toISOString().split('T')[0]}`,
+              body: `## Performance Alert
+
+              Performance degradation or failures have been detected during automated testing.
+
+              **Critical Issues:**
+              - Load Test: ${{ needs.load-testing.result }}
+              - Stress Test: ${{ needs.stress-testing.result }}
+              - Spike Test: ${{ needs.spike-testing.result }}
+
+              **Banking Impact:**
+              Performance issues in financial applications can lead to:
+              - Customer dissatisfaction
+              - Regulatory compliance violations
+              - Revenue loss during peak trading hours
+              - Reputational damage
+
+              ---
+
+              ${report}
+
+              **Next Steps:**
+              1. Assign to performance engineering team
+              2. Analyze system metrics during test periods
+              3. Implement performance improvements
+              4. Re-run tests to validate fixes
+              `,
+              labels: ['performance', 'high-priority', 'automated'],
+              assignees: ['performance-team'] // Replace with actual team members
+            });
+
+      - name: Send Slack notification
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          channel: '#performance-alerts'
+          text: |
+            ⚡ Performance Testing Completed
+
+            **Results Summary:**
+            • Load Test: ${{ needs.load-testing.result || 'skipped' }}
+            • Stress Test: ${{ needs.stress-testing.result || 'skipped' }}
+            • Spike Test: ${{ needs.spike-testing.result || 'skipped' }}
+            • Benchmark: ${{ needs.benchmark-testing.result || 'skipped' }}
+
+            **Environment:** ${{ github.event.inputs.target_environment || 'staging' }}
+
+            📊 View detailed reports in GitHub Actions artifacts
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Update performance dashboard
+        if: always()
+        run: |
+          echo "Updating performance monitoring dashboard..."
+          # Add API calls to update monitoring systems like Grafana, Datadog, etc.
+          curl -X POST "${{ secrets.GRAFANA_API_URL }}/api/annotations" \
+            -H "Authorization: Bearer ${{ secrets.GRAFANA_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "text": "Performance test completed - ${{ github.event.inputs.test_type || 'scheduled' }}",
+              "tags": ["performance", "testing", "${{ github.event.inputs.target_environment || 'staging' }}"],
+              "time": '$(date +%s000)'
+            }' || echo "Failed to update performance dashboard"
