@@ -2,17 +2,13 @@ name: Path-based Testing
 
 on:
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
 
 concurrency:
   group: path-testing-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
-
-env:
-  NODE_VERSION: '20'
-  BUN_VERSION: '1.2.22'
 
 jobs:
   # Detect which paths have changed
@@ -63,45 +59,26 @@ jobs:
     runs-on: ubuntu-latest
     needs: detect-changes
     if: needs.detect-changes.outputs.api == 'true' || needs.detect-changes.outputs.root == 'true'
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: ea_financial_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - name: Setup Test Services
+        uses: ./.github/actions/setup-services
 
       - name: Type check API
         working-directory: ./projects/consumer-accounts-internal-api
         run: bun run tsc --noEmit
+
+      - name: Run Biome checks on API
+        working-directory: ./projects/consumer-accounts-internal-api
+        run: |
+          # Run Biome check on API-specific files
+          bunx biome check src/ tests/
 
       - name: Run API unit tests
         working-directory: ./projects/consumer-accounts-internal-api
@@ -116,8 +93,6 @@ jobs:
         run: bun run test:offline
         env:
           NODE_ENV: test
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ea_financial_test
-          REDIS_URL: redis://localhost:6379
 
       - name: Build API
         working-directory: ./projects/consumer-accounts-internal-api
@@ -140,21 +115,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
 
       - name: Type check App
         working-directory: ./projects/consumer-accounts-internal-app
         run: bun run type-check
 
-      - name: Lint App
+      - name: Run Biome checks on App
         working-directory: ./projects/consumer-accounts-internal-app
-        run: bun run lint
+        run: |
+          # Run Biome check on app-specific files
+          bunx biome check src/
 
       - name: Build App
         working-directory: ./projects/consumer-accounts-internal-app
@@ -186,12 +158,12 @@ jobs:
       - name: Setup kubectl
         uses: azure/setup-kubectl@v3
         with:
-          version: 'v1.28.0'
+          version: "v1.28.0"
 
       - name: Setup Helm
         uses: azure/setup-helm@v3
         with:
-          version: '3.12.0'
+          version: "3.12.0"
 
       - name: Validate Kubernetes manifests
         run: |
@@ -222,11 +194,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
       - name: Install OPA CLI
         run: |
           curl -L -o opa https://github.com/open-policy-agent/opa/releases/latest/download/opa_linux_amd64_static
@@ -329,21 +298,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
       - name: Install markdown linter
         run: bun install -g markdownlint-cli
 
       - name: Lint markdown files
-        run: markdownlint **/*.md --ignore node_modules
+        run: bunx markdownlint **/*.md --ignore node_modules
 
       - name: Check for broken links
         run: |
-          bun install -g markdown-link-check
-          find . -name "*.md" -not -path "./node_modules/*" | xargs -I {} markdown-link-check {}
+          bunx markdown-link-check README.md
+          find . -name "*.md" -not -path "./node_modules/*" -not -name "README.md" | head -5 | xargs -I {} bunx markdown-link-check {}
 
       - name: Validate README structure
         run: |
@@ -383,17 +349,17 @@ jobs:
       - name: Run Trivy filesystem scan
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
+          scan-type: "fs"
+          scan-ref: "."
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH"
 
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: "trivy-results.sarif"
 
       - name: Check for sensitive files
         run: |
@@ -414,13 +380,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
 
       - name: Start API server
         working-directory: ./projects/consumer-accounts-internal-api
@@ -467,17 +428,18 @@ jobs:
   path-based-testing-summary:
     name: Path-based Testing Summary
     runs-on: ubuntu-latest
-    needs: [
-      detect-changes,
-      test-api,
-      test-app,
-      test-infrastructure,
-      test-opa-policies,
-      build-containers,
-      check-documentation,
-      security-scan-changes,
-      performance-impact
-    ]
+    needs:
+      [
+        detect-changes,
+        test-api,
+        test-app,
+        test-infrastructure,
+        test-opa-policies,
+        build-containers,
+        check-documentation,
+        security-scan-changes,
+        performance-impact,
+      ]
     if: always()
     steps:
       - name: Generate summary

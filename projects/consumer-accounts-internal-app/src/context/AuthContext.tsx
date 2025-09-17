@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { User, LoginCredentials, AuthContextType } from '@/types';
+import { createContext, type ReactNode, useContext, useEffect, useReducer } from 'react';
 import { apiService } from '@/services/api';
+import type { AuthContextType, LoginCredentials, User } from '@/types';
 
 // Auth State
 interface AuthState {
@@ -144,9 +144,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const logout = async (): Promise<void> => {
     try {
       await apiService.logout();
-    } catch (error) {
-      // Log error but still proceed with local logout
-      console.warn('Logout request failed:', error);
+    } catch (_error) {
     } finally {
       dispatch({ type: 'LOGOUT' });
     }
@@ -164,21 +162,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       const user = await apiService.verifyToken();
       dispatch({ type: 'VERIFY_SUCCESS', payload: user });
-    } catch (error) {
-      console.warn('Token verification failed:', error);
+    } catch (_error) {
       dispatch({ type: 'VERIFY_FAILURE' });
     }
   };
 
   // Clear error function
-  const clearError = (): void => {
+  const _clearError = (): void => {
     dispatch({ type: 'CLEAR_ERROR' });
   };
 
   // Effect to verify token on mount
   useEffect(() => {
     verifyToken();
-  }, []);
+  }, [verifyToken]);
 
   // Context value
   const contextValue: AuthContextType = {
@@ -190,11 +187,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     loading: state.loading,
   };
 
-  return (
-    <AuthContext.Provider value={contextValue}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
 }
 
 // Custom hook to use auth context
@@ -218,7 +211,7 @@ interface RequireAuthProps {
 export function RequireAuth({
   children,
   fallback = <div>Access Denied</div>,
-  requiredPermissions = []
+  requiredPermissions = [],
 }: RequireAuthProps) {
   const { isAuthenticated, user, loading } = useAuth();
 

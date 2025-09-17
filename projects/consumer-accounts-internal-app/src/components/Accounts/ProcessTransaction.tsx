@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import type React from 'react';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth, usePermissions } from '@/context/AuthContext';
-import { PERMISSIONS, Account, TransactionRequest, Transaction } from '@/types';
 import { apiService } from '@/services/api';
+import { type Account, PERMISSIONS, type Transaction, type TransactionRequest } from '@/types';
 
 interface TransactionFormData {
   type: 'credit' | 'debit';
@@ -58,7 +59,7 @@ const ProcessTransaction: React.FC = () => {
         error: 'No account ID provided',
       }));
     }
-  }, [accountId, hasPermission, navigate]);
+  }, [accountId, hasPermission, navigate, loadAccountData]);
 
   const loadAccountData = async (id: string) => {
     try {
@@ -91,10 +92,10 @@ const ProcessTransaction: React.FC = () => {
     const { amount, description, reference } = state.formData;
 
     // Validate amount
-    const numAmount = parseFloat(amount);
+    const numAmount = Number.parseFloat(amount);
     if (!amount.trim()) {
       errors.amount = 'Amount is required';
-    } else if (isNaN(numAmount) || numAmount <= 0) {
+    } else if (Number.isNaN(numAmount) || numAmount <= 0) {
       errors.amount = 'Amount must be a positive number';
     } else if (numAmount > 999999.99) {
       errors.amount = 'Amount cannot exceed $999,999.99';
@@ -134,9 +135,13 @@ const ProcessTransaction: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!state.account || !user) return;
+    if (!state.account || !user) {
+      return;
+    }
 
-    if (!validateForm()) return;
+    if (!validateForm()) {
+      return;
+    }
 
     const { type, amount, description, reference } = state.formData;
 
@@ -144,7 +149,7 @@ const ProcessTransaction: React.FC = () => {
 
     try {
       const transactionRequest: TransactionRequest = {
-        amount: parseFloat(amount),
+        amount: Number.parseFloat(amount),
         description: description.trim(),
         reference: reference.trim(),
         employeeId: user.id,
@@ -227,7 +232,7 @@ const ProcessTransaction: React.FC = () => {
   if (state.loading) {
     return (
       <div className="transaction-loading">
-        <div className="loading-spinner"></div>
+        <div className="loading-spinner" />
         <p>Loading account information...</p>
       </div>
     );
@@ -290,7 +295,9 @@ const ProcessTransaction: React.FC = () => {
             <div className="transaction-icon">💰</div>
             <div className="title-content">
               <h1>Process Transaction</h1>
-              <p>{account.customerName} • {account.accountNumber}</p>
+              <p>
+                {account.customerName} • {account.accountNumber}
+              </p>
             </div>
           </div>
         </div>
@@ -305,7 +312,8 @@ const ProcessTransaction: React.FC = () => {
               <div className="success-details">
                 <h3>Transaction Successful!</h3>
                 <p>
-                  {state.success.type === 'credit' ? 'Credited' : 'Debited'} {formatCurrency(state.success.amount)}
+                  {state.success.type === 'credit' ? 'Credited' : 'Debited'}{' '}
+                  {formatCurrency(state.success.amount)}
                 </p>
                 <div className="success-meta">
                   <div>Transaction ID: {state.success.transactionId}</div>
@@ -316,16 +324,10 @@ const ProcessTransaction: React.FC = () => {
               </div>
             </div>
             <div className="success-actions">
-              <Link
-                to={`/accounts/${accountId}`}
-                className="primary-button"
-              >
+              <Link to={`/accounts/${accountId}`} className="primary-button">
                 View Account Details
               </Link>
-              <button
-                onClick={handleReset}
-                className="secondary-button"
-              >
+              <button onClick={handleReset} className="secondary-button">
                 Process Another Transaction
               </button>
             </div>
@@ -339,8 +341,8 @@ const ProcessTransaction: React.FC = () => {
             <div className="warning-content">
               <h3>Account Status Warning</h3>
               <p>
-                This account is currently {account.status}. Transactions cannot be processed
-                on inactive, frozen, or closed accounts.
+                This account is currently {account.status}. Transactions cannot be processed on
+                inactive, frozen, or closed accounts.
               </p>
             </div>
           </div>
@@ -361,7 +363,9 @@ const ProcessTransaction: React.FC = () => {
               </div>
               <div className="summary-item">
                 <label>Account Type</label>
-                <value>{account.accountType.charAt(0).toUpperCase() + account.accountType.slice(1)}</value>
+                <value>
+                  {account.accountType.charAt(0).toUpperCase() + account.accountType.slice(1)}
+                </value>
               </div>
               <div className="summary-item">
                 <label>Current Balance</label>
@@ -392,7 +396,7 @@ const ProcessTransaction: React.FC = () => {
                       name="type"
                       value="credit"
                       checked={formData.type === 'credit'}
-                      onChange={(e) => handleInputChange('type', e.target.value)}
+                      onChange={e => handleInputChange('type', e.target.value)}
                       disabled={state.submitting || !canProcessTransactions}
                     />
                     <span className="radio-label">
@@ -406,7 +410,7 @@ const ProcessTransaction: React.FC = () => {
                       name="type"
                       value="debit"
                       checked={formData.type === 'debit'}
-                      onChange={(e) => handleInputChange('type', e.target.value)}
+                      onChange={e => handleInputChange('type', e.target.value)}
                       disabled={state.submitting || !canProcessTransactions}
                     />
                     <span className="radio-label">
@@ -426,7 +430,7 @@ const ProcessTransaction: React.FC = () => {
                     type="number"
                     id="amount"
                     value={formData.amount}
-                    onChange={(e) => handleInputChange('amount', e.target.value)}
+                    onChange={e => handleInputChange('amount', e.target.value)}
                     placeholder="0.00"
                     step="0.01"
                     min="0.01"
@@ -447,7 +451,7 @@ const ProcessTransaction: React.FC = () => {
                   type="text"
                   id="description"
                   value={formData.description}
-                  onChange={(e) => handleInputChange('description', e.target.value)}
+                  onChange={e => handleInputChange('description', e.target.value)}
                   placeholder="Enter transaction description"
                   maxLength={100}
                   disabled={state.submitting || !canProcessTransactions}
@@ -468,7 +472,7 @@ const ProcessTransaction: React.FC = () => {
                   type="text"
                   id="reference"
                   value={formData.reference}
-                  onChange={(e) => handleInputChange('reference', e.target.value)}
+                  onChange={e => handleInputChange('reference', e.target.value)}
                   placeholder="Enter reference number"
                   maxLength={50}
                   disabled={state.submitting || !canProcessTransactions}
@@ -513,7 +517,7 @@ const ProcessTransaction: React.FC = () => {
                 >
                   {state.submitting ? (
                     <>
-                      <span className="loading-spinner-small"></span>
+                      <span className="loading-spinner-small" />
                       Processing...
                     </>
                   ) : (
@@ -534,9 +538,7 @@ const ProcessTransaction: React.FC = () => {
               <div className="preview-card">
                 <div className="preview-header">
                   <div className="preview-type">
-                    <span className="preview-icon">
-                      {formData.type === 'credit' ? '💰' : '💸'}
-                    </span>
+                    <span className="preview-icon">{formData.type === 'credit' ? '💰' : '💸'}</span>
                     <span className="preview-label">
                       {formData.type === 'credit' ? 'Credit' : 'Debit'} Transaction
                     </span>
@@ -547,7 +549,8 @@ const ProcessTransaction: React.FC = () => {
                   <div className="preview-item">
                     <label>Amount</label>
                     <value className={`amount ${formData.type}`}>
-                      {formData.type === 'credit' ? '+' : '-'}{formatCurrency(parseFloat(formData.amount) || 0)}
+                      {formData.type === 'credit' ? '+' : '-'}
+                      {formatCurrency(Number.parseFloat(formData.amount) || 0)}
                     </value>
                   </div>
                   <div className="preview-item">
@@ -567,7 +570,8 @@ const ProcessTransaction: React.FC = () => {
                     <value className="projected-balance">
                       {formatCurrency(
                         account.balance +
-                        (formData.type === 'credit' ? 1 : -1) * (parseFloat(formData.amount) || 0)
+                          (formData.type === 'credit' ? 1 : -1) *
+                            (Number.parseFloat(formData.amount) || 0)
                       )}
                     </value>
                   </div>

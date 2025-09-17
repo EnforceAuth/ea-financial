@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import type React from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth, usePermissions } from '@/context/AuthContext';
-import { PERMISSIONS } from '@/types';
 import { apiService } from '@/services/api';
+import { PERMISSIONS } from '@/types';
 
 interface QuickStats {
   totalAccounts: number;
@@ -33,13 +34,13 @@ const Dashboard: React.FC = () => {
     totalAccounts: 150,
     activeAccounts: 142,
     todayTransactions: 47,
-    pendingTransactions: 3
+    pendingTransactions: 3,
   });
-  const [loading, setLoading] = useState(false);
+  const [_loading, _setLoading] = useState(false);
 
   useEffect(() => {
     loadSystemHealth();
-  }, []);
+  }, [loadSystemHealth]);
 
   const loadSystemHealth = async () => {
     try {
@@ -47,11 +48,9 @@ const Dashboard: React.FC = () => {
       setSystemHealth({
         status: status.status,
         lastChecked: status.timestamp,
-        services: status.services
+        services: status.services,
       });
-    } catch (error) {
-      console.error('Failed to load system health:', error);
-    }
+    } catch (_error) {}
   };
 
   const handleAccountSearch = (e: React.FormEvent) => {
@@ -78,8 +77,12 @@ const Dashboard: React.FC = () => {
 
   const getWelcomeMessage = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
+    if (hour < 12) {
+      return 'Good morning';
+    }
+    if (hour < 17) {
+      return 'Good afternoon';
+    }
     return 'Good evening';
   };
 
@@ -103,7 +106,7 @@ const Dashboard: React.FC = () => {
       icon: '🔍',
       action: () => navigate('/accounts/search'),
       permission: PERMISSIONS.VIEW_ACCOUNTS,
-      primary: true
+      primary: true,
     },
     {
       title: 'Process Transaction',
@@ -111,7 +114,7 @@ const Dashboard: React.FC = () => {
       icon: '💰',
       action: () => navigate('/accounts/search?action=transaction'),
       permission: PERMISSIONS.BASIC_OPERATIONS,
-      primary: true
+      primary: true,
     },
     {
       title: 'View Terms',
@@ -119,7 +122,7 @@ const Dashboard: React.FC = () => {
       icon: '📋',
       action: () => navigate('/terms'),
       permission: null,
-      primary: false
+      primary: false,
     },
     {
       title: 'Transaction History',
@@ -127,15 +130,17 @@ const Dashboard: React.FC = () => {
       icon: '📊',
       action: () => navigate('/accounts/search?action=history'),
       permission: PERMISSIONS.VIEW_TRANSACTIONS,
-      primary: false
-    }
+      primary: false,
+    },
   ];
 
   return (
     <div className="dashboard">
       <div className="dashboard-header">
         <div className="welcome-section">
-          <h1>{getWelcomeMessage()}, {user?.username}!</h1>
+          <h1>
+            {getWelcomeMessage()}, {user?.username}!
+          </h1>
           <p>
             Welcome to the EA Financial Employee Portal. You are logged in as a{' '}
             <span className="user-role">{formatRole(user?.role || '')}</span>.
@@ -149,7 +154,7 @@ const Dashboard: React.FC = () => {
                 type="text"
                 placeholder="Enter Account ID or Number"
                 value={accountSearch}
-                onChange={(e) => setAccountSearch(e.target.value)}
+                onChange={e => setAccountSearch(e.target.value)}
                 className="search-input"
                 disabled={!hasPermission(PERMISSIONS.VIEW_ACCOUNTS)}
               />
@@ -241,7 +246,9 @@ const Dashboard: React.FC = () => {
                     {systemHealth?.status === 'operational' ? '🟢' : '🟡'}
                   </span>
                   <span className="status-text">
-                    {systemHealth?.status === 'operational' ? 'All Systems Operational' : 'Checking Status...'}
+                    {systemHealth?.status === 'operational'
+                      ? 'All Systems Operational'
+                      : 'Checking Status...'}
                   </span>
                 </div>
                 {systemHealth && (

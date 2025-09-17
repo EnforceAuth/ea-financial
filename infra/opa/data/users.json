@@ -62,12 +62,7 @@
     },
     "slee": {
       "role": "analyst",
-      "permissions": [
-        "accounts:read",
-        "balance:read",
-        "transactions:read",
-        "terms:read"
-      ],
+      "permissions": ["accounts:read", "balance:read", "transactions:read", "terms:read"],
       "department": "analytics",
       "active": false,
       "token": "slee_token_000",

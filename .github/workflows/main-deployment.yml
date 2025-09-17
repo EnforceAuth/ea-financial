@@ -2,19 +2,19 @@ name: Main Branch Deployment
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Deployment environment'
+        description: "Deployment environment"
         required: true
-        default: 'staging'
+        default: "staging"
         type: choice
         options:
-        - staging
-        - production
+          - staging
+          - production
       skip_tests:
-        description: 'Skip test execution'
+        description: "Skip test execution"
         required: false
         default: false
         type: boolean
@@ -22,12 +22,6 @@ on:
 concurrency:
   group: main-deployment
   cancel-in-progress: false
-
-env:
-  NODE_VERSION: '20'
-  BUN_VERSION: '1.2.22'
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   # Pre-deployment validation
@@ -43,13 +37,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
 
       - name: Generate version
         id: version
+        shell: bash
         run: |
           VERSION=$(date +%Y%m%d-%H%M%S)-$(git rev-parse --short HEAD)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -57,6 +50,7 @@ jobs:
 
       - name: Check deployment conditions
         id: check
+        shell: bash
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "should_deploy=true" >> $GITHUB_OUTPUT
@@ -69,12 +63,15 @@ jobs:
             echo "Deployment conditions not met"
           fi
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - name: Run code quality checks
+        if: ${{ !inputs.skip_tests }}
+        shell: bash
+        run: bun run check
 
       - name: Run quick smoke tests
         if: ${{ !inputs.skip_tests }}
         working-directory: ./projects/consumer-accounts-internal-api
+        shell: bash
         run: bun run test
 
   # Build and push container images
@@ -87,132 +84,58 @@ jobs:
       contents: read
       packages: write
     outputs:
-      api_image: ${{ steps.meta-api.outputs.tags }}
-      app_image: ${{ steps.meta-app.outputs.tags }}
+      api_image: ${{ steps.build-api.outputs.image }}
+      app_image: ${{ steps.build-app.outputs.image }}
       api_digest: ${{ steps.build-api.outputs.digest }}
       app_digest: ${{ steps.build-app.outputs.digest }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
 
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
+      - name: Setup Infrastructure
+        uses: ./.github/actions/setup-infrastructure
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract API metadata
-        id: meta-api
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/api
-          tags: |
-            type=ref,event=branch
-            type=raw,value=${{ needs.pre-deployment-checks.outputs.version }}
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Extract App metadata
-        id: meta-app
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/app
-          tags: |
-            type=ref,event=branch
-            type=raw,value=${{ needs.pre-deployment-checks.outputs.version }}
-            type=raw,value=latest,enable={{is_default_branch}}
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push API image
         id: build-api
-        uses: docker/build-push-action@v5
+        uses: ./.github/actions/build-and-push
         with:
           context: ./projects/consumer-accounts-internal-api
-          file: ./projects/consumer-accounts-internal-api/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta-api.outputs.tags }}
-          labels: ${{ steps.meta-api.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          image-name: ${{ github.repository }}/api
+          version: ${{ needs.pre-deployment-checks.outputs.version }}
+          sign-image: "true"
           build-args: |
             VERSION=${{ needs.pre-deployment-checks.outputs.version }}
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
             VCS_REF=${{ github.sha }}
-
-      - name: Build and push App image
-        id: build-app
-        uses: docker/build-push-action@v5
-        with:
-          context: ./projects/consumer-accounts-internal-app
-          file: ./projects/consumer-accounts-internal-app/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta-app.outputs.tags }}
-          labels: ${{ steps.meta-app.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          build-args: |
-            VERSION=${{ needs.pre-deployment-checks.outputs.version }}
-            BUILD_DATE=${{ github.event.head_commit.timestamp }}
-            VCS_REF=${{ github.sha }}
-
-      - name: Sign container images
-        run: |
-          echo "Signing container images with cosign..."
-          # Install cosign
-          curl -O -L "https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64"
-          sudo mv cosign-linux-amd64 /usr/local/bin/cosign
-          sudo chmod +x /usr/local/bin/cosign
-
-          # Sign images (requires COSIGN_PRIVATE_KEY secret)
-          # cosign sign --key env://COSIGN_PRIVATE_KEY ${{ steps.meta-api.outputs.tags }}
-          # cosign sign --key env://COSIGN_PRIVATE_KEY ${{ steps.meta-app.outputs.tags }}
-          echo "Image signing completed"
         env:
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
 
-  # Security scanning of built images
-  security-scan-images:
-    name: Security Scan Images
-    runs-on: ubuntu-latest
-    needs: build-and-push
-    permissions:
-      security-events: write
-    steps:
-      - name: Run Trivy vulnerability scanner on API
-        uses: aquasecurity/trivy-action@master
+      - name: Build and push App image
+        id: build-app
+        uses: ./.github/actions/build-and-push
         with:
-          image-ref: ${{ needs.build-and-push.outputs.api_image }}
-          format: 'sarif'
-          output: 'api-trivy-results.sarif'
-
-      - name: Run Trivy vulnerability scanner on App
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ needs.build-and-push.outputs.app_image }}
-          format: 'sarif'
-          output: 'app-trivy-results.sarif'
-
-      - name: Upload API scan results
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: 'api-trivy-results.sarif'
-          category: 'api-image'
-
-      - name: Upload App scan results
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: 'app-trivy-results.sarif'
-          category: 'app-image'
+          context: ./projects/consumer-accounts-internal-app
+          image-name: ${{ github.repository }}/app
+          version: ${{ needs.pre-deployment-checks.outputs.version }}
+          sign-image: "true"
+          build-args: |
+            VERSION=${{ needs.pre-deployment-checks.outputs.version }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
 
   # Deploy to staging environment
   deploy-staging:
     name: Deploy to Staging
     runs-on: ubuntu-latest
-    needs: [pre-deployment-checks, build-and-push, security-scan-images]
+    needs: [pre-deployment-checks, build-and-push]
     if: needs.pre-deployment-checks.outputs.should_deploy == 'true'
     environment:
       name: staging
@@ -221,28 +144,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v3
+      - name: Setup Infrastructure
+        uses: ./.github/actions/setup-infrastructure
         with:
-          version: 'v1.28.0'
-
-      - name: Setup Helm
-        uses: azure/setup-helm@v3
-        with:
-          version: '3.12.0'
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          setup-aws: "true"
           aws-region: us-east-1
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
       - name: Update kubeconfig
+        shell: bash
         run: |
           aws eks update-kubeconfig --region us-east-1 --name ea-financial-staging
 
       - name: Deploy with Helm
+        shell: bash
         run: |
           cd infra/k8s
           helm upgrade --install ea-financial-staging ./helm-chart \
@@ -257,11 +174,13 @@ jobs:
             --timeout=10m
 
       - name: Verify deployment
+        shell: bash
         run: |
           kubectl rollout status deployment/ea-financial-api -n ea-financial-staging --timeout=300s
           kubectl rollout status deployment/ea-financial-app -n ea-financial-staging --timeout=300s
 
       - name: Run smoke tests against staging
+        shell: bash
         run: |
           sleep 30  # Wait for services to be fully ready
           curl -f https://staging.ea-financial.com/health || exit 1
@@ -283,28 +202,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v3
+      - name: Setup Infrastructure
+        uses: ./.github/actions/setup-infrastructure
         with:
-          version: 'v1.28.0'
-
-      - name: Setup Helm
-        uses: azure/setup-helm@v3
-        with:
-          version: '3.12.0'
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_PROD }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD }}
+          setup-aws: "true"
           aws-region: us-east-1
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID_PROD }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD }}
 
       - name: Update kubeconfig
+        shell: bash
         run: |
           aws eks update-kubeconfig --region us-east-1 --name ea-financial-production
 
       - name: Create backup before deployment
+        shell: bash
         run: |
           echo "Creating pre-deployment backup..."
           kubectl create job backup-pre-deploy-$(date +%s) \
@@ -312,6 +225,7 @@ jobs:
             -n ea-financial-production || true
 
       - name: Blue-Green deployment setup
+        shell: bash
         run: |
           cd infra/k8s
           # Deploy to green environment
@@ -328,6 +242,7 @@ jobs:
             --timeout=15m
 
       - name: Run production health checks
+        shell: bash
         run: |
           # Health check against green deployment
           kubectl wait --for=condition=available deployment/ea-financial-api-green -n ea-financial-production --timeout=300s
@@ -340,6 +255,7 @@ jobs:
           pkill kubectl
 
       - name: Switch traffic to green deployment
+        shell: bash
         run: |
           cd infra/k8s
           # Update ingress to point to green deployment
@@ -348,12 +264,14 @@ jobs:
             -p='[{"op": "replace", "path": "/spec/rules/0/http/paths/0/backend/service/name", "value": "ea-financial-api-green"}]'
 
       - name: Final production verification
+        shell: bash
         run: |
           sleep 60  # Wait for traffic switch
           curl -f https://internal.ea-financial.com/health || exit 1
           curl -f https://internal.ea-financial.com/api/health || exit 1
 
       - name: Clean up old blue deployment
+        shell: bash
         run: |
           # Remove old blue deployment after successful green deployment
           helm uninstall ea-financial-production-blue -n ea-financial-production || true
@@ -366,6 +284,7 @@ jobs:
     if: always() && needs.pre-deployment-checks.outputs.should_deploy == 'true'
     steps:
       - name: Update deployment status
+        shell: bash
         run: |
           echo "Deployment completed for version: ${{ needs.pre-deployment-checks.outputs.version }}"
           echo "Staging: ${{ needs.deploy-staging.result }}"
@@ -376,7 +295,7 @@ jobs:
         if: always()
         with:
           status: ${{ job.status }}
-          channel: '#deployments'
+          channel: "#deployments"
           text: |
             🚀 Deployment Update
             Version: ${{ needs.pre-deployment-checks.outputs.version }}
@@ -414,6 +333,7 @@ jobs:
           prerelease: false
 
       - name: Update monitoring dashboards
+        shell: bash
         run: |
           echo "Updating Grafana dashboards with new deployment version..."
           # Add API calls to update monitoring systems

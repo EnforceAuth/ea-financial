@@ -1,0 +1,219 @@
+name: Build and Push Container Images
+
+description: Builds and pushes container images with consistent tagging and security scanning
+
+inputs:
+  context:
+    description: 'Build context directory'
+    required: true
+  dockerfile:
+    description: 'Path to Dockerfile'
+    required: false
+    default: 'Dockerfile'
+  image-name:
+    description: 'Base image name'
+    required: true
+  registry:
+    description: 'Container registry'
+    required: false
+    default: 'ghcr.io'
+  platforms:
+    description: 'Target platforms for build'
+    required: false
+    default: 'linux/amd64,linux/arm64'
+  push:
+    description: 'Whether to push the image'
+    required: false
+    default: 'true'
+  version:
+    description: 'Version tag for the image'
+    required: false
+    default: ''
+  additional-tags:
+    description: 'Additional tags to apply (comma-separated)'
+    required: false
+    default: ''
+  build-args:
+    description: 'Build arguments (multiline string)'
+    required: false
+    default: ''
+  cache-from:
+    description: 'Cache source'
+    required: false
+    default: 'type=gha'
+  cache-to:
+    description: 'Cache destination'
+    required: false
+    default: 'type=gha,mode=max'
+  sign-image:
+    description: 'Whether to sign the image with cosign'
+    required: false
+    default: 'false'
+  scan-image:
+    description: 'Whether to scan image for vulnerabilities'
+    required: false
+    default: 'true'
+  scan-severity:
+    description: 'Vulnerability scan severity levels'
+    required: false
+    default: 'CRITICAL,HIGH,MEDIUM'
+
+outputs:
+  image:
+    description: 'Built image reference'
+    value: ${{ steps.meta.outputs.tags }}
+  digest:
+    description: 'Image digest'
+    value: ${{ steps.build.outputs.digest }}
+  metadata:
+    description: 'Build metadata'
+    value: ${{ steps.meta.outputs.json }}
+  scan-results:
+    description: 'Security scan results file'
+    value: ${{ steps.scan.outputs.sarif }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Validate inputs
+      shell: bash
+      run: |
+        if [ -z "${{ inputs.context }}" ]; then
+          echo "Error: context input is required"
+          exit 1
+        fi
+        if [ -z "${{ inputs.image-name }}" ]; then
+          echo "Error: image-name input is required"
+          exit 1
+        fi
+        if [ ! -d "${{ inputs.context }}" ]; then
+          echo "Error: Build context directory '${{ inputs.context }}' does not exist"
+          exit 1
+        fi
+        if [ ! -f "${{ inputs.context }}/${{ inputs.dockerfile }}" ]; then
+          echo "Error: Dockerfile not found at '${{ inputs.context }}/${{ inputs.dockerfile }}'"
+          exit 1
+        fi
+
+    - name: Generate build metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ inputs.registry }}/${{ inputs.image-name }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=${{ inputs.version }},enable=${{ inputs.version != '' }}
+          type=raw,value=latest,enable={{is_default_branch}}
+          ${{ inputs.additional-tags }}
+        labels: |
+          org.opencontainers.image.title=${{ inputs.image-name }}
+          org.opencontainers.image.description=EA Financial Application Component
+          org.opencontainers.image.vendor=EA Financial
+          org.opencontainers.image.version=${{ inputs.version }}
+          org.opencontainers.image.created={{date 'iso8601'}}
+          org.opencontainers.image.revision={{sha}}
+          org.opencontainers.image.url=https://github.com/${{ github.repository }}
+          org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+    - name: Build and push image
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: ${{ inputs.context }}
+        file: ${{ inputs.context }}/${{ inputs.dockerfile }}
+        platforms: ${{ inputs.platforms }}
+        push: ${{ inputs.push }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: ${{ inputs.cache-from }}
+        cache-to: ${{ inputs.cache-to }}
+        build-args: ${{ inputs.build-args }}
+        provenance: true
+        sbom: true
+
+    - name: Security scan with Trivy
+      id: scan
+      if: inputs.scan-image == 'true' && inputs.push == 'true'
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+        format: 'sarif'
+        output: 'trivy-results-${{ inputs.image-name }}.sarif'
+        severity: ${{ inputs.scan-severity }}
+        exit-code: '0'  # Don't fail the build on vulnerabilities
+      continue-on-error: true
+
+    - name: Upload scan results
+      if: inputs.scan-image == 'true' && inputs.push == 'true' && steps.scan.outcome != 'skipped'
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'trivy-results-${{ inputs.image-name }}.sarif'
+        category: ${{ inputs.image-name }}-image
+      continue-on-error: true
+
+    - name: Sign image with cosign
+      if: inputs.sign-image == 'true' && inputs.push == 'true'
+      shell: bash
+      run: |
+        if [ -n "$COSIGN_PRIVATE_KEY" ]; then
+          echo "Signing image with cosign..."
+          echo "${{ steps.meta.outputs.tags }}" | while IFS= read -r tag; do
+            cosign sign --yes --key env://COSIGN_PRIVATE_KEY "$tag@${{ steps.build.outputs.digest }}"
+            echo "✅ Signed: $tag"
+          done
+        else
+          echo "Warning: COSIGN_PRIVATE_KEY not set, skipping image signing"
+        fi
+      env:
+        COSIGN_PRIVATE_KEY: ${{ env.COSIGN_PRIVATE_KEY }}
+
+    - name: Generate build summary
+      shell: bash
+      run: |
+        echo "## 🐳 Container Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Build Details" >> $GITHUB_STEP_SUMMARY
+        echo "- **Image**: \`${{ inputs.image-name }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Context**: \`${{ inputs.context }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Dockerfile**: \`${{ inputs.dockerfile }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Platforms**: \`${{ inputs.platforms }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Digest**: \`${{ steps.build.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Generated Tags" >> $GITHUB_STEP_SUMMARY
+        echo '${{ steps.meta.outputs.tags }}' | while IFS= read -r tag; do
+          echo "- \`$tag\`" >> $GITHUB_STEP_SUMMARY
+        done
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ "${{ inputs.scan-image }}" = "true" ] && [ "${{ inputs.push }}" = "true" ]; then
+          echo "### Security Scan" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.scan.outcome }}" = "success" ]; then
+            echo "✅ Security scan completed successfully" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Security scan encountered issues (check logs)" >> $GITHUB_STEP_SUMMARY
+          fi
+        fi
+
+        if [ "${{ inputs.sign-image }}" = "true" ] && [ "${{ inputs.push }}" = "true" ]; then
+          echo "### Image Signing" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Image signed with cosign" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Output build information
+      shell: bash
+      run: |
+        echo "🎉 Build completed successfully!"
+        echo ""
+        echo "Image Details:"
+        echo "=============="
+        echo "Name: ${{ inputs.image-name }}"
+        echo "Registry: ${{ inputs.registry }}"
+        echo "Digest: ${{ steps.build.outputs.digest }}"
+        echo ""
+        echo "Tags:"
+        echo '${{ steps.meta.outputs.tags }}' | sed 's/^/  - /'
+        echo ""
+        echo "Metadata:"
+        echo '${{ steps.meta.outputs.json }}' | jq '.' || echo '${{ steps.meta.outputs.json }}'

@@ -1,402 +1,343 @@
-# EA Financial - CI/CD Workflows Documentation
+# EA Financial CI/CD Pipeline Documentation
 
-This document provides comprehensive documentation for the GitHub Actions CI/CD workflows implemented for EA Financial's banking applications.
+This document describes the consolidated CI/CD pipeline setup for the EA Financial repository, including shared actions, environment variables, and best practices.
 
 ## Overview
 
-Our CI/CD pipeline is designed to meet the stringent requirements of a global banking institution, ensuring:
-- **Security-first approach** with comprehensive vulnerability scanning
-- **Compliance** with banking regulations (PCI DSS, SOX, ADA)
-- **High availability** through extensive testing and monitoring
-- **Risk mitigation** with staged deployments and rollback capabilities
+The CI/CD pipeline has been optimized to reduce duplication, improve maintainability, and ensure consistency across all workflows. This is achieved through:
 
-## Workflow Architecture
+1. **Shared Actions**: Reusable composite actions for common tasks
+2. **Environment Consolidation**: Centralized configuration for versions and settings
+3. **Workflow Optimization**: Streamlined workflows using shared components
 
-```mermaid
-graph TB
-    A[Pull Request] --> B[PR Validation]
-    B --> C[Path-based Testing]
-    A --> D[Security Scanning]
-    
-    E[Main Branch Push] --> F[Main Deployment]
-    F --> G[Staging Deployment]
-    G --> H[Production Deployment]
-    
-    I[Scheduled] --> J[Security Scanning]
-    I --> K[Performance Testing]
-    I --> L[E2E Testing]
-    
-    M[Manual Trigger] --> N[Any Workflow]
-```
+## Shared Actions
 
-## Workflows
+### 1. Setup Environment (`/.github/actions/setup-environment`)
 
-### 1. PR Validation (`pr-validation.yml`)
+Sets up the development environment with Bun, Node.js, and dependencies.
 
-**Trigger:** Pull requests to `main`, `develop`, `release/*` branches
-**Purpose:** Comprehensive validation before code integration
-
-#### Features:
-- **Security & Compliance Checks**
-  - Trivy vulnerability scanning
-  - GitGuardian secrets detection
-  - License compliance verification
-  - OPA policy validation
-
-- **Code Quality**
-  - TypeScript type checking
-  - ESLint and Prettier validation
-  - Code formatting verification
-
-- **Testing**
-  - Unit tests with coverage reporting
-  - Integration tests with service dependencies
-  - End-to-end testing with Playwright
-  - Performance impact analysis
-
-- **Container Security**
-  - Docker image vulnerability scanning
-  - Container hardening validation
-
-#### Success Criteria:
-- All security scans pass
-- Code quality checks pass
-- Test coverage > 80%
-- No critical vulnerabilities
-- Performance benchmarks met
-
-### 2. Main Branch Deployment (`main-deployment.yml`)
-
-**Trigger:** Push to `main` branch or manual dispatch
-**Purpose:** Production deployment pipeline
-
-#### Features:
-- **Pre-deployment Validation**
-  - Smoke tests execution
-  - Version generation
-  - Deployment readiness checks
-
-- **Container Build & Push**
-  - Multi-architecture builds (AMD64, ARM64)
-  - Container signing with Cosign
-  - Registry push to GHCR
-
-- **Staged Deployment**
-  - Staging environment deployment
-  - Blue-green production deployment
-  - Health checks and verification
-
-- **Post-deployment**
-  - GitHub release creation
-  - Monitoring dashboard updates
-  - Slack notifications
-
-#### Deployment Environments:
-1. **Staging** - Automatic deployment for testing
-2. **Production** - Manual approval required
-
-### 3. Path-based Testing (`path-based-testing.yml`)
-
-**Trigger:** PRs and pushes with intelligent path detection
-**Purpose:** Efficient testing by running only relevant tests
-
-#### Path Detection:
-- `projects/consumer-accounts-internal-api/**` → API tests
-- `projects/consumer-accounts-internal-app/**` → App tests
-- `infra/**` → Infrastructure tests
-- `infra/opa/**` → Policy tests
-- `**/*.md` → Documentation checks
-
-#### Benefits:
-- Reduced CI execution time
-- Lower resource consumption
-- Faster feedback loops
-- Focused testing efforts
-
-### 4. Security Scanning (`security-scan.yml`)
-
-**Trigger:** Daily schedule (2 AM UTC) or manual dispatch
-**Purpose:** Comprehensive security assessment
-
-#### Scan Types:
-- **Dependencies** - NPM audit, Trivy filesystem scan
-- **Containers** - Image vulnerability assessment
-- **Secrets** - GitGuardian, TruffleHog patterns
-- **Compliance** - Banking regulations (PCI DSS, SOX)
-- **Infrastructure** - Kubernetes security, Docker best practices
-
-#### Banking-Specific Checks:
-- Credit card number patterns
-- SSN detection
-- Banking account number references
-- Audit logging compliance
-- Encryption standards validation
-
-### 5. Performance Testing (`performance-testing.yml`)
-
-**Trigger:** Weekly schedule (Sundays 3 AM UTC) or manual dispatch
-**Purpose:** Banking-grade performance validation
-
-#### Test Types:
-- **Load Testing** - Normal traffic patterns
-- **Stress Testing** - Breaking point identification
-- **Spike Testing** - Sudden traffic surge handling
-- **Volume Testing** - Large dataset processing
-- **Benchmark Testing** - Performance baseline establishment
-
-#### Banking Requirements:
-- API response time (P95) < 2 seconds
-- API response time (median) < 500ms
-- Availability > 99.9%
-- Error rate < 0.1%
-- Support 1000+ concurrent users
-
-### 6. E2E Testing (`e2e-testing.yml`)
-
-**Trigger:** Daily schedule (4 AM UTC), PRs, or manual dispatch
-**Purpose:** Complete user journey validation
-
-#### Test Suites:
-- **Smoke Tests** - Basic functionality validation
-- **Critical Paths** - Core banking workflows
-- **Accessibility** - WCAG 2.1 AA compliance
-- **Regression** - Cross-browser compatibility
-
-#### Banking Workflows Tested:
-- Employee authentication
-- Account lookup and details
-- Transaction history review
-- Customer information access
-- Compliance and audit trails
-- Session management and security
-
-## Security Features
-
-### Secrets Management
-- GitHub Secrets for sensitive data
-- Environment-specific configurations
-- API keys and tokens protection
-
-### Container Security
-- Image vulnerability scanning
-- Non-root user enforcement
-- Minimal base images
-- Security policy validation
-
-### Compliance Monitoring
-- PCI DSS requirement checks
-- SOX compliance validation
-- ADA accessibility standards
-- Audit trail verification
-
-## Environment Configuration
-
-### Required Secrets
-
-#### Authentication & Registry
-```
-GITHUB_TOKEN                 # Automatic (GitHub provided)
-GITGUARDIAN_API_KEY         # GitGuardian secret scanning
-COSIGN_PRIVATE_KEY          # Container image signing
-```
-
-#### AWS/Cloud Infrastructure
-```
-AWS_ACCESS_KEY_ID           # Staging environment access
-AWS_SECRET_ACCESS_KEY       # Staging environment secret
-AWS_ACCESS_KEY_ID_PROD      # Production environment access
-AWS_SECRET_ACCESS_KEY_PROD  # Production environment secret
-```
-
-#### Monitoring & Notifications
-```
-SLACK_WEBHOOK_URL           # Team notifications
-GRAFANA_API_URL            # Performance monitoring
-GRAFANA_API_KEY            # Dashboard updates
-```
-
-#### Testing
-```
-E2E_TEST_TOKEN_PROD        # Production E2E testing (if applicable)
-```
-
-### Environment Variables
-
-#### Default Configurations
+**Usage:**
 ```yaml
-NODE_VERSION: '20'
-BUN_VERSION: '1.2.22'
+- name: Setup Environment
+  uses: ./.github/actions/setup-environment
+  with:
+    bun-version: '1.2.22'          # Optional, defaults to 1.2.22
+    node-version: '24'             # Optional, defaults to 24
+    install-dependencies: 'true'   # Optional, defaults to true
+    working-directory: '.'         # Optional, defaults to current directory
+```
+
+**Features:**
+- Installs and configures Bun and Node.js
+- Enables corepack for package manager compatibility
+- Caches dependencies for faster builds
+- Sets common environment variables (NODE_VERSION, BUN_VERSION, REGISTRY, IMAGE_NAME)
+
+### 2. Setup Infrastructure (`/.github/actions/setup-infrastructure`)
+
+Configures Docker, kubectl, Helm, and other infrastructure tools.
+
+**Usage:**
+```yaml
+- name: Setup Infrastructure
+  uses: ./.github/actions/setup-infrastructure
+  with:
+    docker-buildx: 'true'           # Optional, defaults to true
+    kubectl-version: 'v1.28.0'     # Optional, defaults to v1.28.0
+    helm-version: '3.12.0'         # Optional, defaults to 3.12.0
+    setup-aws: 'true'              # Optional, defaults to false
+    aws-region: 'us-east-1'        # Optional, defaults to us-east-1
+    registry-username: ${{ github.actor }}
+    registry-password: ${{ secrets.GITHUB_TOKEN }}
+```
+
+**Features:**
+- Sets up Docker Buildx for multi-platform builds
+- Installs kubectl and Helm at specified versions
+- Configures AWS credentials when needed
+- Logs into container registries
+- Installs additional tools (cosign, OPA CLI)
+
+### 3. Setup Services (`/.github/actions/setup-services`)
+
+Starts test databases and external services using Docker.
+
+**Usage:**
+```yaml
+- name: Setup Test Services
+  uses: ./.github/actions/setup-services
+  with:
+    postgres-version: '15'         # Optional, defaults to 15
+    redis-version: '7-alpine'      # Optional, defaults to 7-alpine
+    setup-opa: 'true'             # Optional, defaults to false
+    wait-for-services: 'true'     # Optional, defaults to true
+    service-timeout: '60'         # Optional, defaults to 60 seconds
+```
+
+**Features:**
+- Starts PostgreSQL and Redis containers
+- Optionally starts OPA server with policies
+- Waits for services to be ready with health checks
+- Sets environment variables for service URLs
+- Creates test database schemas
+
+### 4. Build and Push (`/.github/actions/build-and-push`)
+
+Builds and pushes container images with consistent tagging and security scanning.
+
+**Usage:**
+```yaml
+- name: Build and Push Image
+  uses: ./.github/actions/build-and-push
+  with:
+    context: './projects/api'              # Required
+    image-name: '${{ github.repository }}/api'  # Required
+    version: 'v1.2.3'                     # Optional
+    push: 'true'                          # Optional, defaults to true
+    scan-image: 'true'                    # Optional, defaults to true
+    sign-image: 'true'                    # Optional, defaults to false
+    platforms: 'linux/amd64,linux/arm64' # Optional
+```
+
+**Features:**
+- Builds multi-platform container images
+- Applies consistent metadata and labels
+- Scans images for vulnerabilities with Trivy
+- Signs images with cosign (when enabled)
+- Uploads security scan results to GitHub
+- Supports build caching for faster builds
+
+## Environment Variables
+
+All common environment variables are consolidated and managed through the shared actions. Key variables include:
+
+### Runtime Versions
+```yaml
+NODE_VERSION: "20"
+BUN_VERSION: "1.2.22"
+```
+
+### Container Registry
+```yaml
 REGISTRY: ghcr.io
 IMAGE_NAME: ${{ github.repository }}
 ```
 
-## Usage Examples
-
-### Manual Workflow Triggers
-
-#### Run Security Scan
-```bash
-# Via GitHub CLI
-gh workflow run security-scan.yml \
-  --field scan_type=full \
-  --field severity_threshold=HIGH
-
-# Via API
-curl -X POST \
-  -H "Authorization: Bearer $GITHUB_TOKEN" \
-  -H "Accept: application/vnd.github.v3+json" \
-  https://api.github.com/repos/OWNER/REPO/actions/workflows/security-scan.yml/dispatches \
-  -d '{"ref":"main","inputs":{"scan_type":"full"}}'
+### Infrastructure Tools
+```yaml
+KUBECTL_VERSION: "v1.28.0"
+HELM_VERSION: "3.12.0"
 ```
 
-#### Deploy to Production
-```bash
-gh workflow run main-deployment.yml \
-  --field environment=production \
-  --field skip_tests=false
+### Test Services
+```yaml
+POSTGRES_VERSION: "15"
+POSTGRES_DB: ea_financial_test
+POSTGRES_USER: postgres
+POSTGRES_PASSWORD: postgres
+REDIS_VERSION: "7-alpine"
 ```
 
-#### Run Performance Tests
-```bash
-gh workflow run performance-testing.yml \
-  --field test_type=load \
-  --field target_environment=staging \
-  --field duration=15 \
-  --field users=100
+### Security and Compliance
+```yaml
+SECURITY_SCAN_SEVERITY: "CRITICAL,HIGH,MEDIUM"
+PCI_DSS_SCOPE: true
+AUDIT_LOGGING: enabled
+ENCRYPTION_AT_REST: required
 ```
 
-### Monitoring Workflow Status
+## Workflow Examples
 
-#### Check Workflow Runs
-```bash
-# List recent workflow runs
-gh run list --workflow=pr-validation.yml --limit=10
+### Optimized PR Validation
 
-# View specific run
-gh run view [RUN_ID]
+The optimized PR validation workflow demonstrates how to use shared actions:
 
-# View logs
-gh run view [RUN_ID] --log
+```yaml
+name: PR Validation (Optimized)
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+      - name: Run linting
+        run: bun run check
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+      - name: Setup Test Services
+        uses: ./.github/actions/setup-services
+        with:
+          setup-opa: 'true'
+      - name: Run tests
+        run: bun run test:integration
 ```
 
-#### Download Artifacts
-```bash
-# List artifacts
-gh run list --workflow=security-scan.yml
-gh api repos/:owner/:repo/actions/runs/[RUN_ID]/artifacts
+### Container Build and Deploy
 
-# Download specific artifact
-gh run download [RUN_ID] --name consolidated-security-report
+```yaml
+build-and-push:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    - name: Setup Environment
+      uses: ./.github/actions/setup-environment
+    - name: Setup Infrastructure
+      uses: ./.github/actions/setup-infrastructure
+      with:
+        registry-username: ${{ github.actor }}
+        registry-password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Build and push API
+      uses: ./.github/actions/build-and-push
+      with:
+        context: ./projects/api
+        image-name: ${{ github.repository }}/api
+        sign-image: 'true'
 ```
+
+## Migration Guide
+
+### From Original Workflows
+
+To migrate existing workflows to use the shared actions:
+
+1. **Replace Environment Setup:**
+   ```yaml
+   # Old
+   - name: Setup Bun
+     uses: oven-sh/setup-bun@v1
+     with:
+       bun-version: ${{ env.BUN_VERSION }}
+   - name: Install dependencies
+     run: bun install --frozen-lockfile
+
+   # New
+   - name: Setup Environment
+     uses: ./.github/actions/setup-environment
+   ```
+
+2. **Replace Infrastructure Setup:**
+   ```yaml
+   # Old
+   - name: Set up Docker Buildx
+     uses: docker/setup-buildx-action@v3
+   - name: Setup kubectl
+     uses: azure/setup-kubectl@v3
+   - name: Setup Helm
+     uses: azure/setup-helm@v3
+
+   # New
+   - name: Setup Infrastructure
+     uses: ./.github/actions/setup-infrastructure
+   ```
+
+3. **Replace Service Setup:**
+   ```yaml
+   # Old
+   services:
+     postgres:
+       image: postgres:15
+       env:
+         POSTGRES_PASSWORD: postgres
+
+   # New
+   - name: Setup Test Services
+     uses: ./.github/actions/setup-services
+   ```
+
+## Benefits
+
+### Reduced Duplication
+- Environment setup steps reduced from ~15 lines to 2 lines per workflow
+- Infrastructure setup consolidated from ~20+ lines to 2 lines
+- Container builds standardized with consistent security scanning
+
+### Improved Maintainability
+- Version updates in one place affect all workflows
+- Bug fixes and improvements benefit all workflows
+- Consistent behavior across all pipelines
+
+### Better Security
+- Standardized security scanning for all container builds
+- Consistent vulnerability reporting
+- Centralized compliance checks
+
+### Faster Builds
+- Optimized caching strategies
+- Parallel execution where possible
+- Reduced workflow complexity
 
 ## Best Practices
 
-### Pull Request Workflow
-1. Create feature branch from `main`
-2. Implement changes with tests
-3. Push branch to trigger path-based testing
-4. Create PR to trigger full validation
-5. Address any failing checks
-6. Obtain required approvals
-7. Merge triggers deployment pipeline
+### Using Shared Actions
 
-### Security Considerations
-- Never commit secrets or sensitive data
-- Use environment-specific configurations
-- Regularly rotate API keys and tokens
-- Monitor security scan results daily
-- Address critical vulnerabilities immediately
+1. **Always specify explicit versions** for critical dependencies
+2. **Use the setup-environment action first** in every job
+3. **Cache appropriately** - the actions handle most caching automatically
+4. **Follow the shell: bash pattern** for run blocks in composite actions
 
-### Performance Monitoring
-- Review performance test results weekly
-- Set up alerts for performance degradation
-- Establish performance budgets for new features
-- Monitor production metrics continuously
+### Environment Variables
 
-### Compliance Management
-- Ensure all regulatory checks pass
-- Document compliance violations and remediation
-- Regular compliance review meetings
-- Maintain audit trails for all changes
+1. **Don't hardcode versions** in individual workflows
+2. **Use the shared environment configuration**
+3. **Override only when necessary** with explicit reasoning
+
+### Security
+
+1. **Always enable image scanning** for container builds
+2. **Sign images in production** workflows
+3. **Use least-privilege permissions** in workflow jobs
+4. **Rotate secrets regularly** and use GitHub's secret scanning
 
 ## Troubleshooting
 
 ### Common Issues
 
-#### Workflow Failures
-```bash
-# Check workflow status
-gh run list --workflow=WORKFLOW_NAME --limit=5
+1. **Action not found**: Ensure the action directory structure is correct
+2. **Permission denied**: Check that composite actions have `shell: bash` specified
+3. **Cache misses**: Verify that cache keys are consistent across runs
+4. **Service startup timeouts**: Increase timeout values for slower environments
 
-# View detailed logs
-gh run view [RUN_ID] --log --job=[JOB_NAME]
+### Debugging
 
-# Re-run failed jobs
-gh run rerun [RUN_ID] --failed
-```
+Enable debug logging by setting repository secrets:
+- `ACTIONS_STEP_DEBUG: true`
+- `ACTIONS_RUNNER_DEBUG: true`
 
-#### Security Scan False Positives
-1. Review scan results in artifacts
-2. Verify if finding is legitimate
-3. If false positive, add to allowlist
-4. Document decision in security log
+### Support
 
-#### Performance Test Failures
-1. Check if infrastructure was under load
-2. Review performance thresholds
-3. Analyze performance trends over time
-4. Consider scaling infrastructure if needed
+For issues with the shared actions or CI/CD pipeline:
+1. Check the GitHub Actions logs for detailed error messages
+2. Verify that all required secrets are configured
+3. Ensure that the repository has the necessary permissions
+4. Review the action source code in `.github/actions/`
 
-### Debug Mode
-Add debugging to workflows by setting:
-```yaml
-env:
-  DEBUG: true
-  ACTIONS_STEP_DEBUG: true
-  ACTIONS_RUNNER_DEBUG: true
-```
+## Future Enhancements
 
-## Metrics & KPIs
+- [ ] Add support for matrix builds across different Node.js versions
+- [ ] Implement automatic dependency updates
+- [ ] Add performance regression testing
+- [ ] Integrate with external monitoring systems
+- [ ] Add support for feature flag deployments
+- [ ] Implement automatic rollback capabilities
 
-### CI/CD Performance
-- **Mean Time to Feedback:** < 15 minutes
-- **Deployment Frequency:** Multiple per day
-- **Lead Time for Changes:** < 2 hours
-- **Mean Time to Recovery:** < 30 minutes
+## Contributing
 
-### Quality Metrics
-- **Test Coverage:** > 80%
-- **Critical Vulnerabilities:** 0
-- **High Vulnerabilities:** < 5
-- **Performance Regression:** 0%
+When modifying shared actions:
 
-### Compliance Metrics
-- **Security Scan Compliance:** 100%
-- **Accessibility Compliance:** WCAG 2.1 AA
-- **Policy Compliance:** 100%
-- **Audit Trail Coverage:** 100%
-
-## Support & Maintenance
-
-### Team Responsibilities
-- **DevOps Team:** Workflow maintenance and infrastructure
-- **Security Team:** Security scan reviews and policy updates
-- **QA Team:** Test maintenance and E2E scenario updates
-- **Development Team:** Code quality and test coverage
-
-### Regular Maintenance
-- **Weekly:** Review performance and security reports
-- **Monthly:** Update dependencies and tools
-- **Quarterly:** Review and update policies
-- **Annually:** Comprehensive security audit
-
-### Contact Information
-- **DevOps Team:** `@devops-team`
-- **Security Team:** `@security-team`
-- **On-call:** `#incident-response`
+1. **Test thoroughly** in a branch before merging
+2. **Update documentation** to reflect changes
+3. **Consider backward compatibility** for existing workflows
+4. **Use semantic versioning** for action releases
+5. **Add appropriate error handling** and logging
 
 ---
 
-**Last Updated:** December 2024
-**Version:** 1.0.0
-**Maintained by:** EA Financial Engineering Team
+*Last updated: December 2024*
+*Maintained by: EA Financial Platform Team*

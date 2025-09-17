@@ -1,6 +1,7 @@
-import React, { useState, FormEvent } from 'react';
+import type React from 'react';
+import { type FormEvent, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { LoginCredentials } from '@/types';
+import type { LoginCredentials } from '@/types';
 
 interface LoginState {
   username: string;
@@ -98,11 +99,11 @@ const Login: React.FC = () => {
                 type="text"
                 id="username"
                 value={state.username}
-                onChange={(e) => handleInputChange('username', e.target.value)}
+                onChange={e => handleInputChange('username', e.target.value)}
                 placeholder="Enter your username"
                 disabled={state.isLoading}
                 autoComplete="username"
-                required
+                required={true}
               />
             </div>
 
@@ -113,11 +114,11 @@ const Login: React.FC = () => {
                   type={state.showPassword ? 'text' : 'password'}
                   id="password"
                   value={state.password}
-                  onChange={(e) => handleInputChange('password', e.target.value)}
+                  onChange={e => handleInputChange('password', e.target.value)}
                   placeholder="Enter your password"
                   disabled={state.isLoading}
                   autoComplete="current-password"
-                  required
+                  required={true}
                 />
                 <button
                   type="button"
@@ -145,7 +146,7 @@ const Login: React.FC = () => {
             >
               {state.isLoading ? (
                 <>
-                  <span className="loading-spinner-small"></span>
+                  <span className="loading-spinner-small" />
                   Signing In...
                 </>
               ) : (
@@ -165,7 +166,7 @@ const Login: React.FC = () => {
                   onClick={() => handleDemoLogin(cred)}
                   role="button"
                   tabIndex={0}
-                  onKeyDown={(e) => {
+                  onKeyDown={e => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
                       handleDemoLogin(cred);
@@ -185,9 +186,7 @@ const Login: React.FC = () => {
               <span className="security-icon">🔒</span>
               <span>This is a secure internal banking system</span>
             </div>
-            <div className="version-info">
-              Version 1.0.0 | EA Financial Internal Use Only
-            </div>
+            <div className="version-info">Version 1.0.0 | EA Financial Internal Use Only</div>
           </div>
         </div>
       </div>

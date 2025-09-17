@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import type React from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '@/services/api';
 
@@ -41,7 +42,7 @@ const Terms: React.FC = () => {
 
   useEffect(() => {
     loadTermsData();
-  }, []);
+  }, [loadTermsData]);
 
   const loadTermsData = async () => {
     try {
@@ -83,7 +84,9 @@ const Terms: React.FC = () => {
   };
 
   const expandAllSections = () => {
-    if (!state.data) return;
+    if (!state.data) {
+      return;
+    }
 
     const currentTabData = state.data[state.activeTab as keyof TermsData] || [];
     const allSectionIds = currentTabData.map(section => section.id);
@@ -110,26 +113,35 @@ const Terms: React.FC = () => {
   };
 
   const highlightSearchTerm = (text: string, searchTerm: string) => {
-    if (!searchTerm) return text;
+    if (!searchTerm) {
+      return text;
+    }
 
     const regex = new RegExp(`(${searchTerm})`, 'gi');
     const parts = text.split(regex);
 
     return parts.map((part, index) => {
       if (part.toLowerCase() === searchTerm.toLowerCase()) {
-        return <mark key={index} className="search-highlight">{part}</mark>;
+        return (
+          <mark key={index} className="search-highlight">
+            {part}
+          </mark>
+        );
       }
       return part;
     });
   };
 
   const filterSections = (sections: TermsSection[]) => {
-    if (!state.searchTerm) return sections;
+    if (!state.searchTerm) {
+      return sections;
+    }
 
     const searchLower = state.searchTerm.toLowerCase();
-    return sections.filter(section =>
-      section.title.toLowerCase().includes(searchLower) ||
-      section.content.toLowerCase().includes(searchLower)
+    return sections.filter(
+      section =>
+        section.title.toLowerCase().includes(searchLower) ||
+        section.content.toLowerCase().includes(searchLower)
     );
   };
 
@@ -144,7 +156,7 @@ const Terms: React.FC = () => {
   if (state.loading) {
     return (
       <div className="terms-loading">
-        <div className="loading-spinner"></div>
+        <div className="loading-spinner" />
         <p>Loading terms and policies...</p>
       </div>
     );
@@ -214,7 +226,7 @@ const Terms: React.FC = () => {
               type="text"
               placeholder="Search terms and policies..."
               value={state.searchTerm}
-              onChange={(e) => handleSearchChange(e.target.value)}
+              onChange={e => handleSearchChange(e.target.value)}
               className="search-input"
             />
             <div className="search-icon">🔍</div>
@@ -226,7 +238,7 @@ const Terms: React.FC = () => {
         {/* Navigation Tabs */}
         <div className="terms-nav">
           <div className="nav-tabs">
-            {tabs.map((tab) => (
+            {tabs.map(tab => (
               <button
                 key={tab.key}
                 onClick={() => handleTabChange(tab.key)}
@@ -266,10 +278,7 @@ const Terms: React.FC = () => {
                 for "{state.searchTerm}"
               </p>
               {filteredSections.length === 0 && (
-                <button
-                  onClick={() => handleSearchChange('')}
-                  className="clear-search-button"
-                >
+                <button onClick={() => handleSearchChange('')} className="clear-search-button">
                   Clear Search
                 </button>
               )}
@@ -281,19 +290,16 @@ const Terms: React.FC = () => {
               <div className="no-results-icon">🔍</div>
               <h3>No Results Found</h3>
               <p>
-                No sections match your search term "{state.searchTerm}".
-                Try different keywords or clear the search to view all sections.
+                No sections match your search term "{state.searchTerm}". Try different keywords or
+                clear the search to view all sections.
               </p>
-              <button
-                onClick={() => handleSearchChange('')}
-                className="primary-button"
-              >
+              <button onClick={() => handleSearchChange('')} className="primary-button">
                 Clear Search
               </button>
             </div>
           ) : (
             <div className="terms-sections">
-              {filteredSections.map((section) => {
+              {filteredSections.map(section => {
                 const isExpanded = state.expandedSections.has(section.id);
 
                 return (
@@ -303,7 +309,7 @@ const Terms: React.FC = () => {
                       onClick={() => toggleSection(section.id)}
                       role="button"
                       tabIndex={0}
-                      onKeyDown={(e) => {
+                      onKeyDown={e => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
                           toggleSection(section.id);
@@ -311,9 +317,7 @@ const Terms: React.FC = () => {
                       }}
                     >
                       <div className="section-title">
-                        <span className="expand-icon">
-                          {isExpanded ? '📖' : '📚'}
-                        </span>
+                        <span className="expand-icon">{isExpanded ? '📖' : '📚'}</span>
                         <h3>{highlightSearchTerm(section.title, state.searchTerm)}</h3>
                       </div>
 
@@ -322,9 +326,7 @@ const Terms: React.FC = () => {
                         <span className="section-date">
                           Updated: {formatDate(section.lastUpdated)}
                         </span>
-                        <span className="expand-indicator">
-                          {isExpanded ? '▼' : '▶'}
-                        </span>
+                        <span className="expand-indicator">{isExpanded ? '▼' : '▶'}</span>
                       </div>
                     </div>
 
@@ -362,9 +364,9 @@ const Terms: React.FC = () => {
             <div className="footer-info">
               <h4>Important Notice</h4>
               <p>
-                These terms and policies are for internal EA Financial employee use only.
-                All information contained herein is confidential and proprietary.
-                Please ensure compliance with all applicable regulations and procedures.
+                These terms and policies are for internal EA Financial employee use only. All
+                information contained herein is confidential and proprietary. Please ensure
+                compliance with all applicable regulations and procedures.
               </p>
             </div>
 

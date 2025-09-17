@@ -1,0 +1,138 @@
+name: Setup Infrastructure Tools
+
+description: Sets up Docker, kubectl, Helm, and other infrastructure tools
+
+inputs:
+  docker-buildx:
+    description: 'Whether to setup Docker Buildx'
+    required: false
+    default: 'true'
+  kubectl-version:
+    description: 'Version of kubectl to install'
+    required: false
+    default: 'v1.28.0'
+  helm-version:
+    description: 'Version of Helm to install'
+    required: false
+    default: '3.12.0'
+  setup-aws:
+    description: 'Whether to configure AWS credentials'
+    required: false
+    default: 'false'
+  aws-region:
+    description: 'AWS region to configure'
+    required: false
+    default: 'us-east-1'
+  container-registry:
+    description: 'Container registry to login to'
+    required: false
+    default: 'ghcr.io'
+  registry-username:
+    description: 'Container registry username'
+    required: false
+    default: ''
+  registry-password:
+    description: 'Container registry password'
+    required: false
+    default: ''
+
+outputs:
+  docker-version:
+    description: 'Installed Docker version'
+    value: ${{ steps.docker-info.outputs.version }}
+  kubectl-version:
+    description: 'Installed kubectl version'
+    value: ${{ steps.kubectl-info.outputs.version }}
+  helm-version:
+    description: 'Installed Helm version'
+    value: ${{ steps.helm-info.outputs.version }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Docker Buildx
+      if: inputs.docker-buildx == 'true'
+      uses: docker/setup-buildx-action@v3
+      with:
+        driver-opts: |
+          network=host
+
+    - name: Get Docker info
+      id: docker-info
+      shell: bash
+      run: |
+        DOCKER_VERSION=$(docker --version | cut -d ' ' -f3 | cut -d ',' -f1)
+        echo "version=$DOCKER_VERSION" >> $GITHUB_OUTPUT
+        echo "Docker version: $DOCKER_VERSION"
+
+    - name: Login to Container Registry
+      if: inputs.registry-username != '' && inputs.registry-password != ''
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ inputs.container-registry }}
+        username: ${{ inputs.registry-username }}
+        password: ${{ inputs.registry-password }}
+
+    - name: Setup kubectl
+      if: inputs.kubectl-version != ''
+      uses: azure/setup-kubectl@v3
+      with:
+        version: ${{ inputs.kubectl-version }}
+
+    - name: Get kubectl info
+      id: kubectl-info
+      if: inputs.kubectl-version != ''
+      shell: bash
+      run: |
+        KUBECTL_VERSION=$(kubectl version --client --output=yaml | grep gitVersion | cut -d '"' -f4)
+        echo "version=$KUBECTL_VERSION" >> $GITHUB_OUTPUT
+        echo "kubectl version: $KUBECTL_VERSION"
+
+    - name: Setup Helm
+      if: inputs.helm-version != ''
+      uses: azure/setup-helm@v3
+      with:
+        version: ${{ inputs.helm-version }}
+
+    - name: Get Helm info
+      id: helm-info
+      if: inputs.helm-version != ''
+      shell: bash
+      run: |
+        HELM_VERSION=$(helm version --template='{{.Version}}')
+        echo "version=$HELM_VERSION" >> $GITHUB_OUTPUT
+        echo "Helm version: $HELM_VERSION"
+
+    - name: Configure AWS credentials
+      if: inputs.setup-aws == 'true'
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-region: ${{ inputs.aws-region }}
+
+    - name: Install additional tools
+      shell: bash
+      run: |
+        echo "Installing additional infrastructure tools..."
+
+        # Install cosign for container signing
+        if ! command -v cosign &> /dev/null; then
+          curl -O -L "https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64"
+          sudo mv cosign-linux-amd64 /usr/local/bin/cosign
+          sudo chmod +x /usr/local/bin/cosign
+          echo "Cosign installed: $(cosign version)"
+        fi
+
+        # Install OPA CLI
+        if ! command -v opa &> /dev/null; then
+          curl -L -o opa https://github.com/open-policy-agent/opa/releases/latest/download/opa_linux_amd64_static
+          chmod +x opa
+          sudo mv opa /usr/local/bin/
+          echo "OPA installed: $(opa version)"
+        fi
+
+    - name: Set infrastructure environment variables
+      shell: bash
+      run: |
+        echo "DOCKER_BUILDKIT=1" >> $GITHUB_ENV
+        echo "COMPOSE_DOCKER_CLI_BUILD=1" >> $GITHUB_ENV
+        echo "BUILDX_NO_DEFAULT_ATTESTATIONS=1" >> $GITHUB_ENV
