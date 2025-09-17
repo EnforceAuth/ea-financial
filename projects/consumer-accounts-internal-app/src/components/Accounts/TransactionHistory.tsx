@@ -1,8 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import type React from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { usePermissions } from '@/context/AuthContext';
-import { PERMISSIONS, Account, TransactionHistory as TransactionHistoryType, Transaction } from '@/types';
 import { apiService } from '@/services/api';
+import {
+  type Account,
+  PERMISSIONS,
+  type Transaction,
+  type TransactionHistory as TransactionHistoryType,
+} from '@/types';
 
 interface TransactionHistoryState {
   account: Account | null;
@@ -30,16 +36,30 @@ const TransactionHistory: React.FC = () => {
     transactions: null,
     loading: true,
     error: null,
-    currentPage: 1,
-    pageSize: 20,
     filters: {
       type: 'all',
       dateRange: 'all',
       startDate: '',
       endDate: '',
-      searchTerm: '',
     },
+    currentPage: 1,
+    pageSize: 25,
   });
+
+  const loadAccountData = useCallback(async (id: string) => {
+    try {
+      const accountData = await apiService.getAccount(id);
+      setState(prev => ({
+        ...prev,
+        account: accountData,
+      }));
+    } catch (error) {
+      setState(prev => ({
+        ...prev,
+        error: error instanceof Error ? error.message : 'Failed to load account data',
+      }));
+    }
+  }, []);
 
   useEffect(() => {
     // Check permissions
@@ -57,52 +77,39 @@ const TransactionHistory: React.FC = () => {
         error: 'No account ID provided',
       }));
     }
-  }, [accountId, hasPermission, navigate]);
+  }, [accountId, hasPermission, navigate, loadAccountData]);
+
+  const loadTransactionHistory = useCallback(
+    async (id: string) => {
+      try {
+        setState(prev => ({ ...prev, loading: true, error: null }));
+
+        const transactionsData = await apiService.getTransactionHistory(id, {
+          page: state.currentPage,
+          limit: state.pageSize,
+        });
+
+        setState(prev => ({
+          ...prev,
+          transactions: transactionsData,
+          loading: false,
+        }));
+      } catch (error) {
+        setState(prev => ({
+          ...prev,
+          loading: false,
+          error: error instanceof Error ? error.message : 'Failed to load transaction history',
+        }));
+      }
+    },
+    [state.currentPage, state.pageSize]
+  );
 
   useEffect(() => {
     if (accountId && state.account) {
       loadTransactionHistory(accountId);
     }
-  }, [accountId, state.currentPage, state.pageSize, state.filters]);
-
-  const loadAccountData = async (id: string) => {
-    try {
-      const accountData = await apiService.getAccount(id);
-      setState(prev => ({
-        ...prev,
-        account: accountData,
-      }));
-    } catch (error) {
-      setState(prev => ({
-        ...prev,
-        loading: false,
-        error: error instanceof Error ? error.message : 'Failed to load account data',
-      }));
-    }
-  };
-
-  const loadTransactionHistory = async (id: string) => {
-    try {
-      setState(prev => ({ ...prev, loading: true, error: null }));
-
-      const transactionsData = await apiService.getTransactionHistory(id, {
-        page: state.currentPage,
-        limit: state.pageSize,
-      });
-
-      setState(prev => ({
-        ...prev,
-        transactions: transactionsData,
-        loading: false,
-      }));
-    } catch (error) {
-      setState(prev => ({
-        ...prev,
-        loading: false,
-        error: error instanceof Error ? error.message : 'Failed to load transaction history',
-      }));
-    }
-  };
+  }, [accountId, loadTransactionHistory, state.account]);
 
   const handlePageChange = (newPage: number) => {
     setState(prev => ({ ...prev, currentPage: newPage }));
@@ -139,8 +146,7 @@ const TransactionHistory: React.FC = () => {
   };
 
   const exportTransactions = () => {
-    // This would typically generate a CSV or PDF export
-    console.log('Export transactions functionality would be implemented here');
+    // TODO: Implement export functionality
   };
 
   const formatCurrency = (amount: number) => {
@@ -150,7 +156,7 @@ const TransactionHistory: React.FC = () => {
     }).format(amount);
   };
 
-  const formatDate = (dateString: string) => {
+  const _formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -194,58 +200,68 @@ const TransactionHistory: React.FC = () => {
   };
 
   // Filter transactions based on current filters
-  const filteredTransactions = state.transactions?.transactions?.filter((transaction: Transaction) => {
-    // Type filter
-    if (state.filters.type !== 'all' && transaction.type !== state.filters.type) {
-      return false;
-    }
-
-    // Search term filter
-    if (state.filters.searchTerm) {
-      const searchTerm = state.filters.searchTerm.toLowerCase();
-      const searchableFields = [
-        transaction.description,
-        transaction.reference,
-        transaction.transactionId,
-        transaction.employeeName || '',
-      ];
-
-      if (!searchableFields.some(field => field.toLowerCase().includes(searchTerm))) {
+  const filteredTransactions =
+    state.transactions?.transactions?.filter((transaction: Transaction) => {
+      // Type filter
+      if (state.filters.type !== 'all' && transaction.type !== state.filters.type) {
         return false;
       }
-    }
 
-    // Date range filter
-    if (state.filters.dateRange !== 'all') {
-      const transactionDate = new Date(transaction.timestamp);
-      const now = new Date();
+      // Search term filter
+      if (state.filters.searchTerm) {
+        const searchTerm = state.filters.searchTerm.toLowerCase();
+        const searchableFields = [
+          transaction.description,
+          transaction.reference,
+          transaction.transactionId,
+          transaction.employeeName || '',
+        ];
 
-      switch (state.filters.dateRange) {
-        case 'today':
-          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          if (transactionDate < today) return false;
-          break;
-        case 'week':
-          const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          if (transactionDate < weekAgo) return false;
-          break;
-        case 'month':
-          const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
-          if (transactionDate < monthAgo) return false;
-          break;
-        case 'custom':
-          if (state.filters.startDate && transactionDate < new Date(state.filters.startDate)) {
-            return false;
-          }
-          if (state.filters.endDate && transactionDate > new Date(state.filters.endDate)) {
-            return false;
-          }
-          break;
+        if (!searchableFields.some(field => field.toLowerCase().includes(searchTerm))) {
+          return false;
+        }
       }
-    }
 
-    return true;
-  }) || [];
+      // Date range filter
+      if (state.filters.dateRange !== 'all') {
+        const transactionDate = new Date(transaction.timestamp);
+        const now = new Date();
+
+        switch (state.filters.dateRange) {
+          case 'today': {
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            if (transactionDate < today) {
+              return false;
+            }
+            break;
+          }
+          case 'week': {
+            const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            if (transactionDate < weekAgo) {
+              return false;
+            }
+            break;
+          }
+          case 'month': {
+            const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+            if (transactionDate < monthAgo) {
+              return false;
+            }
+            break;
+          }
+          case 'custom':
+            if (state.filters.startDate && transactionDate < new Date(state.filters.startDate)) {
+              return false;
+            }
+            if (state.filters.endDate && transactionDate > new Date(state.filters.endDate)) {
+              return false;
+            }
+            break;
+        }
+      }
+
+      return true;
+    }) || [];
 
   if (!hasPermission(PERMISSIONS.VIEW_TRANSACTIONS)) {
     return (
@@ -254,7 +270,7 @@ const TransactionHistory: React.FC = () => {
           <div className="access-denied-icon">🚫</div>
           <h2>Access Denied</h2>
           <p>You don't have permission to view transaction history.</p>
-          <button onClick={() => navigate('/dashboard')} className="primary-button">
+          <button type="button" onClick={() => navigate('/dashboard')} className="primary-button">
             Return to Dashboard
           </button>
         </div>
@@ -265,7 +281,7 @@ const TransactionHistory: React.FC = () => {
   if (state.loading) {
     return (
       <div className="transaction-history-loading">
-        <div className="loading-spinner"></div>
+        <div className="loading-spinner" />
         <p>Loading transaction history...</p>
       </div>
     );
@@ -279,11 +295,19 @@ const TransactionHistory: React.FC = () => {
           <h2>Error Loading Transactions</h2>
           <p>{state.error}</p>
           <div className="error-actions">
-            <button onClick={() => navigate('/dashboard')} className="secondary-button">
+            <button
+              type="button"
+              onClick={() => navigate('/dashboard')}
+              className="secondary-button"
+            >
               Return to Dashboard
             </button>
             {accountId && (
-              <button onClick={() => loadTransactionHistory(accountId)} className="primary-button">
+              <button
+                type="button"
+                onClick={() => loadTransactionHistory(accountId)}
+                className="primary-button"
+              >
                 Try Again
               </button>
             )}
@@ -300,7 +324,7 @@ const TransactionHistory: React.FC = () => {
           <div className="not-found-icon">🔍</div>
           <h2>No Data Available</h2>
           <p>Unable to load account or transaction data.</p>
-          <button onClick={() => navigate('/dashboard')} className="primary-button">
+          <button type="button" onClick={() => navigate('/dashboard')} className="primary-button">
             Return to Dashboard
           </button>
         </div>
@@ -316,6 +340,7 @@ const TransactionHistory: React.FC = () => {
       <div className="transaction-history-header">
         <div className="header-left">
           <button
+            type="button"
             onClick={() => navigate(`/accounts/${accountId}`)}
             className="back-button"
             aria-label="Back to Account Details"
@@ -326,13 +351,16 @@ const TransactionHistory: React.FC = () => {
             <div className="history-icon">📊</div>
             <div className="title-content">
               <h1>Transaction History</h1>
-              <p>{account.customerName} • {account.accountNumber}</p>
+              <p>
+                {account.customerName} • {account.accountNumber}
+              </p>
             </div>
           </div>
         </div>
 
         <div className="header-right">
           <button
+            type="button"
             onClick={exportTransactions}
             className="export-button"
             title="Export Transactions"
@@ -351,17 +379,17 @@ const TransactionHistory: React.FC = () => {
                 type="text"
                 placeholder="Search transactions..."
                 value={state.filters.searchTerm}
-                onChange={(e) => handleFilterChange('searchTerm', e.target.value)}
+                onChange={e => handleFilterChange('searchTerm', e.target.value)}
                 className="search-input"
               />
               <div className="search-icon">🔍</div>
             </div>
 
             <div className="filter-group">
-              <label>Type:</label>
+              <span className="filter-label">Type:</span>
               <select
                 value={state.filters.type}
-                onChange={(e) => handleFilterChange('type', e.target.value)}
+                onChange={e => handleFilterChange('type', e.target.value)}
                 className="filter-select"
               >
                 <option value="all">All Types</option>
@@ -371,10 +399,10 @@ const TransactionHistory: React.FC = () => {
             </div>
 
             <div className="filter-group">
-              <label>Date Range:</label>
+              <span className="filter-label">Date Range:</span>
               <select
                 value={state.filters.dateRange}
-                onChange={(e) => handleFilterChange('dateRange', e.target.value)}
+                onChange={e => handleFilterChange('dateRange', e.target.value)}
                 className="filter-select"
               >
                 <option value="all">All Time</option>
@@ -388,27 +416,27 @@ const TransactionHistory: React.FC = () => {
             {state.filters.dateRange === 'custom' && (
               <>
                 <div className="filter-group">
-                  <label>Start Date:</label>
+                  <span className="filter-label">Start Date:</span>
                   <input
                     type="date"
                     value={state.filters.startDate}
-                    onChange={(e) => handleFilterChange('startDate', e.target.value)}
+                    onChange={e => handleFilterChange('startDate', e.target.value)}
                     className="date-input"
                   />
                 </div>
                 <div className="filter-group">
-                  <label>End Date:</label>
+                  <span className="filter-label">End Date:</span>
                   <input
                     type="date"
                     value={state.filters.endDate}
-                    onChange={(e) => handleFilterChange('endDate', e.target.value)}
+                    onChange={e => handleFilterChange('endDate', e.target.value)}
                     className="date-input"
                   />
                 </div>
               </>
             )}
 
-            <button onClick={clearFilters} className="clear-filters-button">
+            <button type="button" onClick={clearFilters} className="clear-filters-button">
               Clear Filters
             </button>
           </div>
@@ -435,9 +463,7 @@ const TransactionHistory: React.FC = () => {
             </div>
             <div className="stat-item">
               <div className="stat-label">Current Balance</div>
-              <div className="stat-value balance">
-                {formatCurrency(account.balance)}
-              </div>
+              <div className="stat-value balance">{formatCurrency(account.balance)}</div>
             </div>
           </div>
         </div>
@@ -447,10 +473,10 @@ const TransactionHistory: React.FC = () => {
           <div className="transactions-header">
             <h2>Transactions</h2>
             <div className="page-size-selector">
-              <label>Show:</label>
+              <span className="filter-label">Show:</span>
               <select
                 value={state.pageSize}
-                onChange={(e) => handlePageSizeChange(parseInt(e.target.value))}
+                onChange={e => handlePageSizeChange(Number.parseInt(e.target.value, 10))}
                 className="page-size-select"
               >
                 <option value={10}>10 per page</option>
@@ -466,12 +492,16 @@ const TransactionHistory: React.FC = () => {
               <div className="no-transactions-icon">📭</div>
               <h3>No Transactions Found</h3>
               <p>
-                {state.filters.type !== 'all' || state.filters.dateRange !== 'all' || state.filters.searchTerm
+                {state.filters.type !== 'all' ||
+                state.filters.dateRange !== 'all' ||
+                state.filters.searchTerm
                   ? 'No transactions match your current filters.'
                   : 'No transactions have been processed for this account yet.'}
               </p>
-              {(state.filters.type !== 'all' || state.filters.dateRange !== 'all' || state.filters.searchTerm) && (
-                <button onClick={clearFilters} className="primary-button">
+              {(state.filters.type !== 'all' ||
+                state.filters.dateRange !== 'all' ||
+                state.filters.searchTerm) && (
+                <button type="button" onClick={clearFilters} className="primary-button">
                   Clear Filters
                 </button>
               )}
@@ -491,7 +521,7 @@ const TransactionHistory: React.FC = () => {
                 </div>
 
                 <div className="table-body">
-                  {filteredTransactions.map((transaction) => (
+                  {filteredTransactions.map(transaction => (
                     <div key={transaction.transactionId} className="table-row">
                       <div className="table-cell date-cell">
                         <div className="date-primary">{formatShortDate(transaction.timestamp)}</div>
@@ -522,7 +552,8 @@ const TransactionHistory: React.FC = () => {
 
                       <div className="table-cell amount-cell">
                         <div className={`amount ${transaction.type}`}>
-                          {transaction.type === 'credit' ? '+' : '-'}{formatCurrency(transaction.amount)}
+                          {transaction.type === 'credit' ? '+' : '-'}
+                          {formatCurrency(transaction.amount)}
                         </div>
                       </div>
 
@@ -560,6 +591,7 @@ const TransactionHistory: React.FC = () => {
 
                   <div className="pagination-controls">
                     <button
+                      type="button"
                       onClick={() => handlePageChange(state.currentPage - 1)}
                       disabled={state.currentPage <= 1}
                       className="pagination-button"
@@ -569,7 +601,7 @@ const TransactionHistory: React.FC = () => {
 
                     <div className="page-numbers">
                       {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                        let pageNum;
+                        let pageNum: number;
                         if (totalPages <= 5) {
                           pageNum = i + 1;
                         } else if (state.currentPage <= 3) {
@@ -583,6 +615,7 @@ const TransactionHistory: React.FC = () => {
                         return (
                           <button
                             key={pageNum}
+                            type="button"
                             onClick={() => handlePageChange(pageNum)}
                             className={`page-button ${state.currentPage === pageNum ? 'active' : ''}`}
                           >
@@ -593,6 +626,7 @@ const TransactionHistory: React.FC = () => {
                     </div>
 
                     <button
+                      type="button"
                       onClick={() => handlePageChange(state.currentPage + 1)}
                       disabled={state.currentPage >= totalPages}
                       className="pagination-button"

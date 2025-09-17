@@ -1,18 +1,18 @@
-import axios, { AxiosInstance, AxiosError } from 'axios';
-import {
-  ApiResponse,
-  AuthResponse,
-  LoginCredentials,
-  User,
+import axios, { type AxiosError, type AxiosInstance } from 'axios';
+import type {
   Account,
   AccountBalance,
+  ApiResponse,
+  AuthResponse,
+  HealthStatus,
+  LoginCredentials,
+  PaginationParams,
+  ServiceStatus,
+  Terms,
   Transaction,
   TransactionHistory,
   TransactionRequest,
-  Terms,
-  HealthStatus,
-  ServiceStatus,
-  PaginationParams
+  User,
 } from '@/types';
 
 // API Configuration
@@ -34,20 +34,20 @@ class ApiService {
 
     // Request interceptor to add auth token
     this.api.interceptors.request.use(
-      (config) => {
+      config => {
         if (this.token) {
           config.headers.Authorization = `Bearer ${this.token}`;
         }
         return config;
       },
-      (error) => {
+      error => {
         return Promise.reject(error);
       }
     );
 
     // Response interceptor for error handling
     this.api.interceptors.response.use(
-      (response) => response,
+      response => response,
       (error: AxiosError) => {
         if (error.response?.status === 401) {
           // Token expired or invalid
@@ -113,7 +113,7 @@ class ApiService {
     return response.data;
   }
 
-  async getApiInfo(): Promise<any> {
+  async getApiInfo(): Promise<unknown> {
     const response = await this.api.get('/');
     return response.data;
   }
@@ -161,7 +161,9 @@ class ApiService {
   }
 
   async getAccountBalance(accountId: string): Promise<AccountBalance> {
-    const response = await this.api.get<ApiResponse<AccountBalance>>(`/accounts/${accountId}/balance`);
+    const response = await this.api.get<ApiResponse<AccountBalance>>(
+      `/accounts/${accountId}/balance`
+    );
 
     if (response.data.success && response.data.data) {
       return response.data.data;
@@ -201,8 +203,12 @@ class ApiService {
     params: PaginationParams = {}
   ): Promise<TransactionHistory> {
     const queryParams = new URLSearchParams();
-    if (params.page) queryParams.append('page', params.page.toString());
-    if (params.limit) queryParams.append('limit', params.limit.toString());
+    if (params.page) {
+      queryParams.append('page', params.page.toString());
+    }
+    if (params.limit) {
+      queryParams.append('limit', params.limit.toString());
+    }
 
     const url = `/accounts/${accountId}/transactions${queryParams.toString() ? `?${queryParams}` : ''}`;
     const response = await this.api.get<ApiResponse<TransactionHistory>>(url);
@@ -225,7 +231,7 @@ class ApiService {
     throw new Error(response.data.message || 'Failed to fetch terms');
   }
 
-  async getGeneralTerms(): Promise<any> {
+  async getGeneralTerms(): Promise<unknown> {
     const response = await this.api.get<ApiResponse>('/terms/general');
 
     if (response.data.success) {
@@ -235,7 +241,7 @@ class ApiService {
     throw new Error(response.data.message || 'Failed to fetch general terms');
   }
 
-  async getEmployeeProcedures(): Promise<any> {
+  async getEmployeeProcedures(): Promise<unknown> {
     const response = await this.api.get<ApiResponse>('/terms/employee-procedures');
 
     if (response.data.success) {
@@ -245,7 +251,7 @@ class ApiService {
     throw new Error(response.data.message || 'Failed to fetch employee procedures');
   }
 
-  async getRegulatoryDisclosures(): Promise<any> {
+  async getRegulatoryDisclosures(): Promise<unknown> {
     const response = await this.api.get<ApiResponse>('/terms/regulatory');
 
     if (response.data.success) {
@@ -255,7 +261,7 @@ class ApiService {
     throw new Error(response.data.message || 'Failed to fetch regulatory disclosures');
   }
 
-  async getAccountPolicies(): Promise<any> {
+  async getAccountPolicies(): Promise<unknown> {
     const response = await this.api.get<ApiResponse>('/terms/account-policies');
 
     if (response.data.success) {
@@ -265,7 +271,7 @@ class ApiService {
     throw new Error(response.data.message || 'Failed to fetch account policies');
   }
 
-  async getTransactionLimits(): Promise<any> {
+  async getTransactionLimits(): Promise<unknown> {
     const response = await this.api.get<ApiResponse>('/terms/transaction-limits');
 
     if (response.data.success) {
@@ -315,5 +321,5 @@ export const {
   getTransactionLimits,
   getHealth,
   getStatus,
-  testConnection
+  testConnection,
 } = apiService;

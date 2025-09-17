@@ -1,0 +1,347 @@
+name: Main Branch Deployment
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+      skip_tests:
+        description: "Skip test execution"
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: main-deployment
+  cancel-in-progress: false
+
+jobs:
+  # Pre-deployment validation
+  pre-deployment-checks:
+    name: Pre-deployment Validation
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      should_deploy: ${{ steps.check.outputs.should_deploy }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+
+      - name: Generate version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(date +%Y%m%d-%H%M%S)-$(git rev-parse --short HEAD)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Generated version: $VERSION"
+
+      - name: Check deployment conditions
+        id: check
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+            echo "Manual deployment triggered"
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+            echo "Main branch push detected"
+          else
+            echo "should_deploy=false" >> $GITHUB_OUTPUT
+            echo "Deployment conditions not met"
+          fi
+
+      - name: Run code quality checks
+        if: ${{ !inputs.skip_tests }}
+        shell: bash
+        run: bun run check
+
+      - name: Run quick smoke tests
+        if: ${{ !inputs.skip_tests }}
+        working-directory: ./projects/consumer-accounts-internal-api
+        shell: bash
+        run: bun run test
+
+  # Build and push container images
+  build-and-push:
+    name: Build & Push Images
+    runs-on: ubuntu-latest
+    needs: pre-deployment-checks
+    if: needs.pre-deployment-checks.outputs.should_deploy == 'true'
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      api_image: ${{ steps.build-api.outputs.image }}
+      app_image: ${{ steps.build-app.outputs.image }}
+      api_digest: ${{ steps.build-api.outputs.digest }}
+      app_digest: ${{ steps.build-app.outputs.digest }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+
+      - name: Setup Infrastructure
+        uses: ./.github/actions/setup-infrastructure
+        with:
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push API image
+        id: build-api
+        uses: ./.github/actions/build-and-push
+        with:
+          context: ./projects/consumer-accounts-internal-api
+          image-name: ${{ github.repository }}/api
+          version: ${{ needs.pre-deployment-checks.outputs.version }}
+          sign-image: "true"
+          build-args: |
+            VERSION=${{ needs.pre-deployment-checks.outputs.version }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+
+      - name: Build and push App image
+        id: build-app
+        uses: ./.github/actions/build-and-push
+        with:
+          context: ./projects/consumer-accounts-internal-app
+          image-name: ${{ github.repository }}/app
+          version: ${{ needs.pre-deployment-checks.outputs.version }}
+          sign-image: "true"
+          build-args: |
+            VERSION=${{ needs.pre-deployment-checks.outputs.version }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+
+  # Deploy to staging environment
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [pre-deployment-checks, build-and-push]
+    if: needs.pre-deployment-checks.outputs.should_deploy == 'true'
+    environment:
+      name: staging
+      url: https://staging.ea-financial.com
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Infrastructure
+        uses: ./.github/actions/setup-infrastructure
+        with:
+          setup-aws: "true"
+          aws-region: us-east-1
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Update kubeconfig
+        shell: bash
+        run: |
+          aws eks update-kubeconfig --region us-east-1 --name ea-financial-staging
+
+      - name: Deploy with Helm
+        shell: bash
+        run: |
+          cd infra/k8s
+          helm upgrade --install ea-financial-staging ./helm-chart \
+            --namespace ea-financial-staging \
+            --create-namespace \
+            --set api.image.tag=${{ needs.pre-deployment-checks.outputs.version }} \
+            --set app.image.tag=${{ needs.pre-deployment-checks.outputs.version }} \
+            --set environment=staging \
+            --set ingress.host=staging.ea-financial.com \
+            --values values-staging.yaml \
+            --wait \
+            --timeout=10m
+
+      - name: Verify deployment
+        shell: bash
+        run: |
+          kubectl rollout status deployment/ea-financial-api -n ea-financial-staging --timeout=300s
+          kubectl rollout status deployment/ea-financial-app -n ea-financial-staging --timeout=300s
+
+      - name: Run smoke tests against staging
+        shell: bash
+        run: |
+          sleep 30  # Wait for services to be fully ready
+          curl -f https://staging.ea-financial.com/health || exit 1
+          curl -f https://staging.ea-financial.com/api/health || exit 1
+
+  # Production deployment (manual approval required)
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [pre-deployment-checks, build-and-push, deploy-staging]
+    if: |
+      needs.pre-deployment-checks.outputs.should_deploy == 'true' &&
+      (github.event.inputs.environment == 'production' ||
+       (github.ref == 'refs/heads/main' && github.event_name == 'push'))
+    environment:
+      name: production
+      url: https://internal.ea-financial.com
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Infrastructure
+        uses: ./.github/actions/setup-infrastructure
+        with:
+          setup-aws: "true"
+          aws-region: us-east-1
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID_PROD }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD }}
+
+      - name: Update kubeconfig
+        shell: bash
+        run: |
+          aws eks update-kubeconfig --region us-east-1 --name ea-financial-production
+
+      - name: Create backup before deployment
+        shell: bash
+        run: |
+          echo "Creating pre-deployment backup..."
+          kubectl create job backup-pre-deploy-$(date +%s) \
+            --from=cronjob/database-backup \
+            -n ea-financial-production || true
+
+      - name: Blue-Green deployment setup
+        shell: bash
+        run: |
+          cd infra/k8s
+          # Deploy to green environment
+          helm upgrade --install ea-financial-production-green ./helm-chart \
+            --namespace ea-financial-production \
+            --create-namespace \
+            --set api.image.tag=${{ needs.pre-deployment-checks.outputs.version }} \
+            --set app.image.tag=${{ needs.pre-deployment-checks.outputs.version }} \
+            --set environment=production \
+            --set ingress.host=internal.ea-financial.com \
+            --set deployment.strategy=green \
+            --values values-production.yaml \
+            --wait \
+            --timeout=15m
+
+      - name: Run production health checks
+        shell: bash
+        run: |
+          # Health check against green deployment
+          kubectl wait --for=condition=available deployment/ea-financial-api-green -n ea-financial-production --timeout=300s
+          kubectl wait --for=condition=available deployment/ea-financial-app-green -n ea-financial-production --timeout=300s
+
+          # Port forward and test
+          kubectl port-forward svc/ea-financial-api-green 8080:80 -n ea-financial-production &
+          sleep 10
+          curl -f http://localhost:8080/health || exit 1
+          pkill kubectl
+
+      - name: Switch traffic to green deployment
+        shell: bash
+        run: |
+          cd infra/k8s
+          # Update ingress to point to green deployment
+          kubectl patch ingress ea-financial-ingress -n ea-financial-production \
+            --type='json' \
+            -p='[{"op": "replace", "path": "/spec/rules/0/http/paths/0/backend/service/name", "value": "ea-financial-api-green"}]'
+
+      - name: Final production verification
+        shell: bash
+        run: |
+          sleep 60  # Wait for traffic switch
+          curl -f https://internal.ea-financial.com/health || exit 1
+          curl -f https://internal.ea-financial.com/api/health || exit 1
+
+      - name: Clean up old blue deployment
+        shell: bash
+        run: |
+          # Remove old blue deployment after successful green deployment
+          helm uninstall ea-financial-production-blue -n ea-financial-production || true
+
+  # Post-deployment monitoring and notifications
+  post-deployment:
+    name: Post-deployment Tasks
+    runs-on: ubuntu-latest
+    needs: [pre-deployment-checks, deploy-staging, deploy-production]
+    if: always() && needs.pre-deployment-checks.outputs.should_deploy == 'true'
+    steps:
+      - name: Update deployment status
+        shell: bash
+        run: |
+          echo "Deployment completed for version: ${{ needs.pre-deployment-checks.outputs.version }}"
+          echo "Staging: ${{ needs.deploy-staging.result }}"
+          echo "Production: ${{ needs.deploy-production.result }}"
+
+      - name: Send Slack notification
+        uses: 8398a7/action-slack@v3
+        if: always()
+        with:
+          status: ${{ job.status }}
+          channel: "#deployments"
+          text: |
+            🚀 Deployment Update
+            Version: ${{ needs.pre-deployment-checks.outputs.version }}
+            Staging: ${{ needs.deploy-staging.result }}
+            Production: ${{ needs.deploy-production.result }}
+            Commit: ${{ github.event.head_commit.message }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Create GitHub Release
+        if: needs.deploy-production.result == 'success'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ needs.pre-deployment-checks.outputs.version }}
+          release_name: Release v${{ needs.pre-deployment-checks.outputs.version }}
+          body: |
+            ## Release Notes
+
+            **Version:** ${{ needs.pre-deployment-checks.outputs.version }}
+            **Commit:** ${{ github.sha }}
+
+            ### Deployed Services
+            - API: `${{ needs.build-and-push.outputs.api_image }}`
+            - App: `${{ needs.build-and-push.outputs.app_image }}`
+
+            ### Environments
+            - ✅ Staging: Deployed successfully
+            - ✅ Production: Deployed successfully
+
+            ### Changes
+            ${{ github.event.head_commit.message }}
+          draft: false
+          prerelease: false
+
+      - name: Update monitoring dashboards
+        shell: bash
+        run: |
+          echo "Updating Grafana dashboards with new deployment version..."
+          # Add API calls to update monitoring systems
+          curl -X POST "${{ secrets.GRAFANA_API_URL }}/api/annotations" \
+            -H "Authorization: Bearer ${{ secrets.GRAFANA_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "text": "Production deployment v${{ needs.pre-deployment-checks.outputs.version }}",
+              "tags": ["deployment", "production"],
+              "time": '$(date +%s000)'
+            }' || echo "Failed to update Grafana annotations"

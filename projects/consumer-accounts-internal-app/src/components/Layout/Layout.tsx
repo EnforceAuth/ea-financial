@@ -1,4 +1,4 @@
-import React from 'react';
+import type React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, usePermissions } from '@/context/AuthContext';
 import { PERMISSIONS } from '@/types';
@@ -17,8 +17,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     try {
       await logout();
       navigate('/login');
-    } catch (error) {
-      console.error('Logout failed:', error);
+    } catch (_error) {
       // Still navigate to login even if logout request fails
       navigate('/login');
     }
@@ -29,24 +28,24 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       path: '/dashboard',
       label: 'Dashboard',
       icon: '🏠',
-      requiredPermissions: []
+      requiredPermissions: [],
     },
     {
       path: '/accounts/search',
       label: 'Account Search',
       icon: '🔍',
-      requiredPermissions: [PERMISSIONS.VIEW_ACCOUNTS]
+      requiredPermissions: [PERMISSIONS.VIEW_ACCOUNTS],
     },
     {
       path: '/terms',
       label: 'Terms & Policies',
       icon: '📋',
-      requiredPermissions: []
-    }
+      requiredPermissions: [],
+    },
   ];
 
   const isActivePath = (path: string) => {
-    return location.pathname === path || location.pathname.startsWith(path + '/');
+    return location.pathname === path || location.pathname.startsWith(`${path}/`);
   };
 
   const getRoleBadgeClass = (role: string) => {
@@ -95,9 +94,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
           <div className="header-center">
             <nav className="main-navigation">
-              {navigationItems.map((item) => {
+              {navigationItems.map(item => {
                 // Check if user has required permissions
-                const hasRequiredPermissions = item.requiredPermissions.length === 0 ||
+                const hasRequiredPermissions =
+                  item.requiredPermissions.length === 0 ||
                   item.requiredPermissions.every(permission => hasPermission(permission));
 
                 if (!hasRequiredPermissions) {
@@ -128,6 +128,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               </div>
               <div className="user-actions">
                 <button
+                  type="button"
                   onClick={handleLogout}
                   className="logout-button"
                   title="Sign Out"
@@ -143,9 +144,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       </header>
 
       <main className="layout-main">
-        <div className="main-content">
-          {children}
-        </div>
+        <div className="main-content">{children}</div>
       </main>
 
       <footer className="layout-footer">
@@ -167,6 +166,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <div className="quick-actions">
         {hasPermission(PERMISSIONS.BASIC_OPERATIONS) && (
           <button
+            type="button"
             className="quick-action-button"
             title="Quick Transaction"
             onClick={() => navigate('/accounts/search?action=transaction')}
@@ -176,6 +176,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         )}
         {hasPermission(PERMISSIONS.VIEW_ACCOUNTS) && (
           <button
+            type="button"
             className="quick-action-button"
             title="Account Lookup"
             onClick={() => navigate('/accounts/search')}

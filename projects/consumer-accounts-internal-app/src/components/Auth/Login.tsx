@@ -1,6 +1,7 @@
-import React, { useState, FormEvent } from 'react';
+import type React from 'react';
+import { type FormEvent, useId, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { LoginCredentials } from '@/types';
+import type { LoginCredentials } from '@/types';
 
 interface LoginState {
   username: string;
@@ -21,7 +22,11 @@ const Login: React.FC = () => {
   });
 
   const demoCredentials = [
-    { username: 'jsmith', password: 'password123', role: 'Senior Representative' },
+    {
+      username: 'jsmith',
+      password: 'password123',
+      role: 'Senior Representative',
+    },
     { username: 'mjohnson', password: 'password456', role: 'Manager' },
     { username: 'rbrown', password: 'password789', role: 'Representative' },
     { username: 'slee', password: 'password000', role: 'Analyst (Inactive)' },
@@ -78,6 +83,9 @@ const Login: React.FC = () => {
     setState(prev => ({ ...prev, showPassword: !prev.showPassword }));
   };
 
+  const user_id = useId();
+  const pass_id = useId();
+
   return (
     <div className="login-container">
       <div className="login-background">
@@ -96,13 +104,13 @@ const Login: React.FC = () => {
               <label htmlFor="username">Username</label>
               <input
                 type="text"
-                id="username"
+                id={user_id}
                 value={state.username}
-                onChange={(e) => handleInputChange('username', e.target.value)}
+                onChange={e => handleInputChange('username', e.target.value)}
                 placeholder="Enter your username"
                 disabled={state.isLoading}
                 autoComplete="username"
-                required
+                required={true}
               />
             </div>
 
@@ -111,13 +119,13 @@ const Login: React.FC = () => {
               <div className="password-input-group">
                 <input
                   type={state.showPassword ? 'text' : 'password'}
-                  id="password"
+                  id={pass_id}
                   value={state.password}
-                  onChange={(e) => handleInputChange('password', e.target.value)}
+                  onChange={e => handleInputChange('password', e.target.value)}
                   placeholder="Enter your password"
                   disabled={state.isLoading}
                   autoComplete="current-password"
-                  required
+                  required={true}
                 />
                 <button
                   type="button"
@@ -145,7 +153,7 @@ const Login: React.FC = () => {
             >
               {state.isLoading ? (
                 <>
-                  <span className="loading-spinner-small"></span>
+                  <span className="loading-spinner-small" />
                   Signing In...
                 </>
               ) : (
@@ -158,24 +166,16 @@ const Login: React.FC = () => {
             <h3>Demo Credentials</h3>
             <p>Click any credential set to populate the form:</p>
             <div className="demo-credentials">
-              {demoCredentials.map((cred, index) => (
-                <div
-                  key={index}
+              {demoCredentials.map(cred => (
+                <button
+                  key={cred.username}
+                  type="button"
                   className="demo-credential-card"
                   onClick={() => handleDemoLogin(cred)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      handleDemoLogin(cred);
-                    }
-                  }}
                 >
                   <div className="demo-username">{cred.username}</div>
                   <div className="demo-role">{cred.role}</div>
-                  <div className="demo-password">Password: {cred.password}</div>
-                </div>
+                </button>
               ))}
             </div>
           </div>
@@ -185,9 +185,7 @@ const Login: React.FC = () => {
               <span className="security-icon">🔒</span>
               <span>This is a secure internal banking system</span>
             </div>
-            <div className="version-info">
-              Version 1.0.0 | EA Financial Internal Use Only
-            </div>
+            <div className="version-info">Version 1.0.0 | EA Financial Internal Use Only</div>
           </div>
         </div>
       </div>

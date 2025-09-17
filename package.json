@@ -2,8 +2,20 @@
   "name": "ea-financial-monorepo",
   "type": "module",
   "private": true,
+  "scripts": {
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --write --unsafe .",
+    "format": "biome format .",
+    "format:fix": "biome format --write .",
+    "check": "biome check .",
+    "check:fix": "biome check --write --unsafe .",
+    "lint:markdown": "markdownlint **/*.md --ignore node_modules",
+    "lint:markdown:fix": "markdownlint **/*.md --ignore node_modules --fix"
+  },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@biomejs/biome": "^2.2.4",
+    "markdownlint-cli": "^0.41.0"
   },
   "peerDependencies": {
     "typescript": "^5"
