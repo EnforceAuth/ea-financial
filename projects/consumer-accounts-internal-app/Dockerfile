@@ -5,11 +5,18 @@ FROM oven/bun:1.2-alpine AS build
 WORKDIR /app
 
 # Copy package file and install dependencies
-COPY package.json ./
+COPY projects/consumer-accounts-internal-app/package.json ./
 RUN bun install
 
 # Copy source code
-COPY . .
+COPY projects/consumer-accounts-internal-app/src ./src
+COPY projects/consumer-accounts-internal-app/index.html ./
+COPY projects/consumer-accounts-internal-app/vite.config.ts ./
+COPY projects/consumer-accounts-internal-app/tsconfig.json ./
+COPY projects/consumer-accounts-internal-app/tsconfig.node.json ./
+
+# Copy nginx configuration
+COPY projects/consumer-accounts-internal-app/nginx.conf ./
 
 # Build the application
 RUN bunx vite build
@@ -21,7 +28,7 @@ FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html
 
 # Copy nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/nginx.conf /etc/nginx/conf.d/default.conf
 
 # Expose port
 EXPOSE 80

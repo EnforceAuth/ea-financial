@@ -57,7 +57,7 @@ start_minikube() {
         echo "Starting Minikube with Docker driver and sufficient resources..."
         minikube start \
             --driver=docker \
-            --memory=8192 \
+            --memory=4096 \
             --cpus=4 \
             --disk-size=20g \
             --kubernetes-version=v1.28.0
