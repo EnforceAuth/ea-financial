@@ -4,6 +4,12 @@ This monorepo contains the code for the EA Financial, a fictional global bank se
 
 ## Quick Start - Access the App in Your Browser
 
+### Install Dependencies
+
+- `bun`: [https://bun.com/docs/installation](https://bun.com/docs/installation)
+- `eopa`: homebrew?  build from source [https://github.com/open-policy-agent/eopa](https://github.com/open-policy-agent/eopa)
+- `regal`: homebrew?  build from source [https://github.com/open-policy-agent/regal](https://github.com/open-policy-agent/regal)
+
 ### ⚡ Super Quick (One Command)
 ```bash
 ./app.sh
