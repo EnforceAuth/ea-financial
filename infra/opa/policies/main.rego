@@ -28,6 +28,12 @@ allow if {
 	input.request.http.method == "OPTIONS"
 }
 
+# Allow login attempts (no authentication required for login endpoint)
+allow if {
+	input.request.http.method == "POST"
+	input.request.http.path == "/auth/login"
+}
+
 # Helper function to get authenticated user claims
 authenticated_claims := user_claims if {
 	token := extract_token

@@ -60,7 +60,7 @@ class OPAService {
       }
 
       const data = await response.json();
-      const users = data.result?.users || {};
+      const users = data.result || {};
 
       // Find user by token
       for (const [username, userData] of Object.entries(users)) {
@@ -101,6 +101,16 @@ class OPAService {
     headers?: Record<string, string>,
   ): Promise<{ allowed: boolean; user?: any; error?: string }> {
     try {
+      // Check if OPA service is available first
+      const healthCheck = await this.quickHealthCheck();
+      if (!healthCheck.healthy) {
+        console.error("OPA service unavailable during authorization check");
+        return {
+          allowed: false,
+          error: `Authorization service unavailable: ${healthCheck.error}`,
+        };
+      }
+
       // First get user from token if provided
       let user;
       if (authorization) {
@@ -216,6 +226,45 @@ class OPAService {
           error instanceof Error ? error.message : "OPA service unreachable",
       };
     }
+  }
+
+  /**
+   * Quick health check with shorter timeout for real-time validation
+   */
+  async quickHealthCheck(): Promise<{ healthy: boolean; error?: string }> {
+    try {
+      const response = await fetch(`${this.opaUrl}/health`, {
+        method: "GET",
+        signal: AbortSignal.timeout(2000), // 2 second timeout
+      });
+
+      if (!response.ok) {
+        return {
+          healthy: false,
+          error: `OPA health check failed: ${response.status}`,
+        };
+      }
+
+      // OPA health endpoint returns {} which is a valid healthy response
+      const data = await response.json();
+      return {
+        healthy: true,
+      };
+    } catch (error) {
+      return {
+        healthy: false,
+        error:
+          error instanceof Error ? error.message : "OPA service unreachable",
+      };
+    }
+  }
+
+  /**
+   * Check if OPA service is available before attempting authorization
+   */
+  async isServiceAvailable(): Promise<boolean> {
+    const health = await this.quickHealthCheck();
+    return health.healthy;
   }
 
   /**
