@@ -1,6 +1,7 @@
 import { Elysia } from "elysia";
 import { dataService } from "../data/dataService";
 import { authService } from "../services/authService";
+import { opaService } from "../services/opaService";
 import { LoginRequest, LoginResponse, ApiResponse } from "../types";
 
 export const authRoutes = new Elysia({ prefix: "/auth" })
@@ -53,6 +54,45 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
 
         // Generate token
         const token = authService.generateToken(user.username);
+
+        // Test OPA service availability by checking if it can validate the token
+        const tokenUserResult = await opaService.getUserFromToken(
+          `Bearer ${token}`,
+        );
+
+        if (tokenUserResult.error) {
+          console.error(
+            "OPA token validation failed during login:",
+            tokenUserResult.error,
+          );
+          set.status = 503;
+          return {
+            success: false,
+            message: "Authorization service unavailable",
+            error:
+              "Unable to complete login. OPA authorization service is not available. Please contact your system administrator.",
+          };
+        }
+
+        // Verify the token resolved to the correct user
+        if (
+          !tokenUserResult.user ||
+          tokenUserResult.user.username !== user.username
+        ) {
+          console.error(
+            "OPA token validation returned incorrect user during login:",
+            tokenUserResult.user?.username,
+            "expected:",
+            user.username,
+          );
+          set.status = 503;
+          return {
+            success: false,
+            message: "Authorization service unavailable",
+            error:
+              "Unable to complete login. OPA authorization service is not available. Please contact your system administrator.",
+          };
+        }
 
         const loginResponse: LoginResponse = {
           success: true,

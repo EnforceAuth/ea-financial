@@ -1,7 +1,8 @@
-import React from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth, usePermissions } from '@/context/AuthContext';
-import { PERMISSIONS } from '@/types';
+import React from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useAuth, usePermissions } from "@/context/AuthContext";
+import { PERMISSIONS } from "@/types";
+import SystemStatus from "./SystemStatus";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -16,64 +17,66 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const handleLogout = async () => {
     try {
       await logout();
-      navigate('/login');
+      navigate("/login");
     } catch (error) {
-      console.error('Logout failed:', error);
+      console.error("Logout failed:", error);
       // Still navigate to login even if logout request fails
-      navigate('/login');
+      navigate("/login");
     }
   };
 
   const navigationItems = [
     {
-      path: '/dashboard',
-      label: 'Dashboard',
-      icon: '🏠',
-      requiredPermissions: []
+      path: "/dashboard",
+      label: "Dashboard",
+      icon: "🏠",
+      requiredPermissions: [],
     },
     {
-      path: '/accounts/search',
-      label: 'Account Search',
-      icon: '🔍',
-      requiredPermissions: [PERMISSIONS.VIEW_ACCOUNTS]
+      path: "/accounts/search",
+      label: "Account Search",
+      icon: "🔍",
+      requiredPermissions: [PERMISSIONS.VIEW_ACCOUNTS],
     },
     {
-      path: '/terms',
-      label: 'Terms & Policies',
-      icon: '📋',
-      requiredPermissions: []
-    }
+      path: "/terms",
+      label: "Terms & Policies",
+      icon: "📋",
+      requiredPermissions: [],
+    },
   ];
 
   const isActivePath = (path: string) => {
-    return location.pathname === path || location.pathname.startsWith(path + '/');
+    return (
+      location.pathname === path || location.pathname.startsWith(path + "/")
+    );
   };
 
   const getRoleBadgeClass = (role: string) => {
     switch (role) {
-      case 'manager':
-        return 'role-badge role-manager';
-      case 'senior_representative':
-        return 'role-badge role-senior';
-      case 'representative':
-        return 'role-badge role-representative';
-      case 'analyst':
-        return 'role-badge role-analyst';
+      case "manager":
+        return "role-badge role-manager";
+      case "senior_representative":
+        return "role-badge role-senior";
+      case "representative":
+        return "role-badge role-representative";
+      case "analyst":
+        return "role-badge role-analyst";
       default:
-        return 'role-badge';
+        return "role-badge";
     }
   };
 
   const formatRole = (role: string) => {
     switch (role) {
-      case 'senior_representative':
-        return 'Senior Representative';
-      case 'representative':
-        return 'Representative';
-      case 'manager':
-        return 'Manager';
-      case 'analyst':
-        return 'Analyst';
+      case "senior_representative":
+        return "Senior Representative";
+      case "representative":
+        return "Representative";
+      case "manager":
+        return "Manager";
+      case "analyst":
+        return "Analyst";
       default:
         return role;
     }
@@ -97,8 +100,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <nav className="main-navigation">
               {navigationItems.map((item) => {
                 // Check if user has required permissions
-                const hasRequiredPermissions = item.requiredPermissions.length === 0 ||
-                  item.requiredPermissions.every(permission => hasPermission(permission));
+                const hasRequiredPermissions =
+                  item.requiredPermissions.length === 0 ||
+                  item.requiredPermissions.every((permission) =>
+                    hasPermission(permission),
+                  );
 
                 if (!hasRequiredPermissions) {
                   return null;
@@ -108,7 +114,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={`nav-item ${isActivePath(item.path) ? 'active' : ''}`}
+                    className={`nav-item ${isActivePath(item.path) ? "active" : ""}`}
                   >
                     <span className="nav-icon">{item.icon}</span>
                     <span className="nav-label">{item.label}</span>
@@ -122,8 +128,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <div className="user-info">
               <div className="user-details">
                 <div className="user-name">{user?.username}</div>
-                <div className={getRoleBadgeClass(user?.role || '')}>
-                  {formatRole(user?.role || '')}
+                <div className={getRoleBadgeClass(user?.role || "")}>
+                  {formatRole(user?.role || "")}
                 </div>
               </div>
               <div className="user-actions">
@@ -142,10 +148,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
       </header>
 
+      {/* System Status Bar */}
+      <div className="system-status-bar">
+        <SystemStatus />
+      </div>
+
       <main className="layout-main">
-        <div className="main-content">
-          {children}
-        </div>
+        <div className="main-content">{children}</div>
       </main>
 
       <footer className="layout-footer">
@@ -169,7 +178,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <button
             className="quick-action-button"
             title="Quick Transaction"
-            onClick={() => navigate('/accounts/search?action=transaction')}
+            onClick={() => navigate("/accounts/search?action=transaction")}
           >
             💰
           </button>
@@ -178,7 +187,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <button
             className="quick-action-button"
             title="Account Lookup"
-            onClick={() => navigate('/accounts/search')}
+            onClick={() => navigate("/accounts/search")}
           >
             👤
           </button>
