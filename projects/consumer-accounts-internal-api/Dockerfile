@@ -1,27 +1,31 @@
 # Use Bun base image
 FROM oven/bun:1.2-alpine
 
-# Set working directory
-WORKDIR /app
+# Set working directory to monorepo root
+WORKDIR /monorepo
 
-# Copy package.json and bun.lock first for better caching
+# Copy root package files
 COPY package.json bun.lock ./
 
-# Install dependencies
+# Copy workspace package files
+COPY projects/consumer-accounts-internal-api/package.json ./projects/consumer-accounts-internal-api/
+COPY projects/consumer-accounts-internal-app/package.json ./projects/consumer-accounts-internal-app/
+
+# Copy API source code (needed before install for workspace resolution)
+COPY projects/consumer-accounts-internal-api ./projects/consumer-accounts-internal-api
+
+# Install all dependencies (respects workspace)
 RUN bun install --frozen-lockfile
 
-# Copy source code
-COPY . .
-
-# Build the application
-RUN bun run build
+# Set working directory to API project
+WORKDIR /monorepo/projects/consumer-accounts-internal-api
 
 # Expose port
 EXPOSE 3001
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3001/health || exit 1
+    CMD curl -f http://localhost:3001/health || exit 1
 
 # Start the application
 CMD ["bun", "run", "start"]

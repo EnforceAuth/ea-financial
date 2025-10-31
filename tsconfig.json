@@ -14,6 +14,8 @@
     "verbatimModuleSyntax": true,
     "noEmit": true,
 
+    // Path mapping - handled at project level
+
     // Best practices
     "strict": true,
     "skipLibCheck": true,
@@ -25,5 +27,6 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
-  }
+  },
+  "exclude": ["projects/**"]
 }

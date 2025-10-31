@@ -1,0 +1,88 @@
+name: Setup Development Environment
+
+description: Sets up Bun, installs dependencies, and configures common environment variables
+
+inputs:
+  bun-version:
+    description: 'Version of Bun to install'
+    required: false
+    default: '1.2.22'
+  node-version:
+    description: 'Version of Node.js to install'
+    required: false
+    default: '24'
+  cache-dependency-path:
+    description: 'Path to lockfile for cache key generation'
+    required: false
+    default: 'bun.lock'
+  install-dependencies:
+    description: 'Whether to install dependencies'
+    required: false
+    default: 'true'
+  working-directory:
+    description: 'Working directory for dependency installation'
+    required: false
+    default: '.'
+
+outputs:
+  bun-cache-hit:
+    description: 'Whether Bun cache was hit'
+    value: ${{ steps.cache.outputs.cache-hit }}
+  node-version:
+    description: 'Installed Node.js version'
+    value: ${{ steps.setup-node.outputs.node-version }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Node.js
+      id: setup-node
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Enable corepack
+      shell: bash
+      run: |
+        echo "Before: corepack version => $(corepack --version || echo 'not installed')"
+        npm install -g corepack@latest
+        echo "After: corepack version => $(corepack --version)"
+        corepack enable
+
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: ${{ inputs.bun-version }}
+
+    - name: Get Bun cache directory
+      id: bun-cache-dir
+      shell: bash
+      run: |
+        echo "dir=$(bun pm cache)" >> $GITHUB_OUTPUT
+
+    - name: Cache Bun dependencies
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ steps.bun-cache-dir.outputs.dir }}
+          node_modules
+          ~/.bun/install/cache
+        key: ${{ runner.os }}-bun-${{ hashFiles(inputs.cache-dependency-path) }}
+        restore-keys: |
+          ${{ runner.os }}-bun-
+
+    - name: Install dependencies
+      if: inputs.install-dependencies == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: bun install --frozen-lockfile
+
+    - name: Set common environment variables
+      shell: bash
+      run: |
+        echo "NODE_VERSION=${{ inputs.node-version }}" >> $GITHUB_ENV
+        echo "BUN_VERSION=${{ inputs.bun-version }}" >> $GITHUB_ENV
+        echo "REGISTRY=ghcr.io" >> $GITHUB_ENV
+        echo "IMAGE_NAME=${{ github.repository }}" >> $GITHUB_ENV
+        echo "CI=true" >> $GITHUB_ENV
