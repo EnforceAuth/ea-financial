@@ -1,6 +1,6 @@
-# OPA Configuration for Enterprise OPA / Docker / Kubernetes
-# Used by: ./app.sh eopa, docker-compose, k8s deployments
-# Includes Enterprise plugins (envoy_ext_authz_grpc)
+# OPA Configuration for Local Development
+# Used by: ./app.sh opa
+# Standard OPA without Enterprise plugins
 
 services:
   s3:
@@ -8,11 +8,6 @@ services:
     credentials:
       s3_signing:
         environment_credentials: {}
-
-plugins:
-  envoy_ext_authz_grpc:
-    addr: :9191
-    query: data.envoy.authz.allow
 
 decision_logs:
   console: true
@@ -36,11 +31,6 @@ bundles:
     polling:
       min_delay_seconds: 10
       max_delay_seconds: 20
-
-# Enable distributed tracing
-distributed_tracing:
-  type: http
-  address: http://jaeger:14268/api/traces
 
 # Configure metrics
 metrics:
