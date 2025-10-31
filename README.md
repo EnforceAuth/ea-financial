@@ -35,6 +35,12 @@ chmod +x opa && sudo mv opa /usr/local/bin/
 
 This starts the authorization service and provides instructions for the API and frontend.
 
+**Note**: OPA fetches policy bundles from S3. Create a `.env` file with your AWS credentials:
+```bash
+cp .env.example .env
+# Add your AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+```
+
 ### 🔍 Check System Status
 ```bash
 ./app.sh status
@@ -121,8 +127,9 @@ Complete authorization system using Open Policy Agent (OPA):
 ### `infra/` - Infrastructure Configuration
 Kubernetes deployments, Docker configurations, and management scripts:
 - `k8s/` - Kubernetes manifests and ConfigMaps
-- `opa/` - Open Policy Agent server configuration
-- `scripts/` - Deployment and monitoring scripts
+- `opa/` - Open Policy Agent server configuration (fetches bundles from S3)
+- `scripts/` - Deployment scripts (`setup.sh`, `deploy.sh`, `monitor.sh`, `cleanup.sh`)
+- `docker-compose.dev.yml` - Full dev stack with Traefik, Redis, PostgreSQL, Prometheus, Grafana
 - See [infra/README.md](infra/README.md) for detailed documentation
 
 ### `projects/` - Application Services
@@ -259,9 +266,8 @@ Having issues? Check the [TROUBLESHOOTING.md](TROUBLESHOOTING.md) guide for:
 ## Documentation
 
 - [🔐 Authorization Module](infra/opa/README.md) - Detailed OPA authorization documentation
-- [🌐 Consumer Accounts API](projects/consumer-accounts-internal-api/README.md) - **NEW: Complete OPA integration guide**
-- [🏗️ Infrastructure Guide](infra/README.md) - Deployment and operations  
-- [📋 Infrastructure Summary](infra/INFRASTRUCTURE_SUMMARY.md) - Technical overview
+- [🌐 Consumer Accounts API](projects/consumer-accounts-internal-api/README.md) - Complete OPA integration guide
+- [🏗️ Infrastructure Guide](infra/README.md) - Deployment and operations
 
 ## 👥 Demo Credentials & Testing
 

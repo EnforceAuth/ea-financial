@@ -5,8 +5,18 @@
 
 set -e
 
+# Load environment variables from .env file if it exists
+if [ -f ".env" ]; then
+    set -a  # automatically export all variables
+    source .env
+    set +a
+    echo "✅ Loaded environment variables from .env"
+fi
+
 # Configuration
 OPA_PORT=8181
+OPA_CONFIG_FILE="./infra/opa/config/opa-config-local.yaml"
+EOPA_CONFIG_FILE="./infra/opa/config/opa-config.yaml"
 OPA_DATA_DIR="./infra/opa/data"
 OPA_POLICIES_DIR="./infra/opa/policies"
 API_PORT=3001
@@ -36,7 +46,7 @@ check_port() {
 
 # Function to start OPA service
 start_opa() {
-    echo -e "${BLUE}🔐 Starting OPA Authorization Service...${NC}"
+    echo -e "${BLUE}🔐 Starting OPA Authorization Service (with S3 bundle support)...${NC}"
 
     if check_port $OPA_PORT; then
         echo -e "${YELLOW}⚠️  OPA already running on port $OPA_PORT${NC}"
@@ -50,33 +60,42 @@ start_opa() {
         return 1
     fi
 
-    # Start OPA in background
+    # Check if AWS credentials are set
+    if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+        echo -e "${YELLOW}⚠️  AWS credentials not set - OPA will fail to fetch bundle from S3${NC}"
+        echo -e "${YELLOW}   Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in .env file${NC}"
+    else
+        echo -e "${GREEN}✅ AWS credentials loaded${NC}"
+    fi
+
+    # Start OPA in background with config file
     opa run --server \
         --addr localhost:$OPA_PORT \
-        $OPA_POLICIES_DIR \
-        $OPA_DATA_DIR \
+        --config-file $OPA_CONFIG_FILE \
         --log-level info &
 
     local opa_pid=$!
     echo -e "${GREEN}✅ OPA started (PID: $opa_pid)${NC}"
+    echo -e "${CYAN}   Fetching bundle from S3: s3://${OPA_BUNDLE_BUCKET:-ea-financial-demo-policy}/${OPA_BUNDLE_PATH:-policies/ea-financial/bundle.tar.gz}${NC}"
 
     # Wait for OPA to be ready
     echo -e "${BLUE}⏳ Waiting for OPA to be ready...${NC}"
-    for i in {1..10}; do
+    for i in {1..15}; do
         if curl -s "http://localhost:$OPA_PORT/health" >/dev/null 2>&1; then
-            echo -e "${GREEN}✅ OPA is ready${NC}"
+            echo -e "${GREEN}✅ OPA is ready and bundle loaded from S3${NC}"
             return 0
         fi
         sleep 1
     done
 
     echo -e "${RED}❌ OPA failed to start properly${NC}"
+    echo -e "${YELLOW}   Check that AWS credentials are correct and S3 bucket is accessible${NC}"
     return 1
 }
 
 # Function to start EOPA service (Enterprise OPA with additional features)
 start_eopa() {
-    echo -e "${PURPLE}🔐 Starting Enterprise OPA (EOPA) Service...${NC}"
+    echo -e "${PURPLE}🔐 Starting Enterprise OPA (EOPA) Service (with S3 bundle support)...${NC}"
     echo -e "${YELLOW}Note: EOPA includes additional security features and audit logging${NC}"
 
     if check_port $OPA_PORT; then
@@ -91,11 +110,18 @@ start_eopa() {
         return 1
     fi
 
+    # Check if AWS credentials are set
+    if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+        echo -e "${YELLOW}⚠️  AWS credentials not set - OPA will fail to fetch bundle from S3${NC}"
+        echo -e "${YELLOW}   Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in .env file${NC}"
+    else
+        echo -e "${GREEN}✅ AWS credentials loaded${NC}"
+    fi
+
     # Start EOPA with enhanced logging and audit features
     opa run --server \
         --addr localhost:$OPA_PORT \
-        $OPA_POLICIES_DIR \
-        $OPA_DATA_DIR \
+        --config-file $EOPA_CONFIG_FILE \
         --log-level debug \
         --log-format json \
         --set decision_logs.console=true \
@@ -103,18 +129,20 @@ start_eopa() {
 
     local eopa_pid=$!
     echo -e "${GREEN}✅ EOPA started with enhanced features (PID: $eopa_pid)${NC}"
+    echo -e "${CYAN}   Fetching bundle from S3: s3://${OPA_BUNDLE_BUCKET:-ea-financial-demo-policy}/${OPA_BUNDLE_PATH:-policies/ea-financial/bundle.tar.gz}${NC}"
 
     # Wait for EOPA to be ready
     echo -e "${BLUE}⏳ Waiting for EOPA to be ready...${NC}"
-    for i in {1..10}; do
+    for i in {1..15}; do
         if curl -s "http://localhost:$OPA_PORT/health" >/dev/null 2>&1; then
-            echo -e "${GREEN}✅ EOPA is ready with audit logging enabled${NC}"
+            echo -e "${GREEN}✅ EOPA is ready with audit logging enabled and bundle loaded from S3${NC}"
             return 0
         fi
         sleep 1
     done
 
     echo -e "${RED}❌ EOPA failed to start properly${NC}"
+    echo -e "${YELLOW}   Check that AWS credentials are correct and S3 bucket is accessible${NC}"
     return 1
 }
 
