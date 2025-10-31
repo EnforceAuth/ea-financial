@@ -89,7 +89,7 @@ The Consumer Accounts Web App is the frontend companion to the EA Financial Inte
    ```
 
 5. **Access the application:**
-   Open [http://localhost:3000](http://localhost:3000) in your browser
+   Open `http://localhost:3000` in your browser
 
 ## 🧑‍💻 Development
 
@@ -370,9 +370,9 @@ This project is proprietary to EA Financial. All rights reserved.
 ## 📞 Support
 
 For internal support and questions:
-- **Engineering Team:** engineering@eafinancial.com
-- **UI/UX Team:** design@eafinancial.com
-- **Security Issues:** security@eafinancial.com
+- **Engineering Team:** `engineering@eafinancial.com`
+- **UI/UX Team:** `design@eafinancial.com`
+- **Security Issues:** `security@eafinancial.com`
 - **Bug Reports:** Use the internal issue tracking system
 
 ## 🔮 Roadmap

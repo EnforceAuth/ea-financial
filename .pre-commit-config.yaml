@@ -1,0 +1,95 @@
+# EA Financial Pre-commit Configuration
+# Ensures code quality checks run before commits
+
+repos:
+  - repo: local
+    hooks:
+      # Biome linting and formatting
+      - id: biome-check
+        name: Biome Check
+        entry: bunx biome check --apply
+        language: system
+        types: [javascript, typescript, jsx, tsx, json]
+        pass_filenames: false
+        always_run: false
+
+      # Biome formatting only for specific file changes
+      - id: biome-format
+        name: Biome Format
+        entry: bunx biome format --write
+        language: system
+        types: [javascript, typescript, jsx, tsx, json, css]
+        pass_filenames: true
+
+  # Markdown linting (since Biome doesn't support it yet)
+  - repo: local
+    hooks:
+      - id: markdownlint
+        name: Markdown Lint
+        entry: bunx markdownlint --fix
+        language: system
+        types: [markdown]
+        pass_filenames: true
+
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      # Security: Prevent committing sensitive files
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: detect-private-key
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-json
+        exclude: tsconfig\.json$  # Allow comments in tsconfig
+
+      # Code quality
+      - id: end-of-file-fixer
+        exclude: \.min\.(js|css)$
+      - id: trailing-whitespace
+        exclude: \.min\.(js|css)$
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+
+  # Banking-specific security checks
+  - repo: local
+    hooks:
+      - id: banking-security-check
+        name: Banking Security Patterns
+        entry: bash -c 'if grep -r -E "(credit.card|ssn|social.security|routing.number)" --include="*.ts" --include="*.js" --exclude-dir=node_modules .; then echo "Potential sensitive data detected in code"; exit 1; fi'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      # Check for hardcoded secrets
+      - id: secret-pattern-check
+        name: Secret Pattern Check
+        entry: bash -c 'if grep -r -E "(password|secret|key|token)\s*=\s*[\"'\''][^\"'\'']*[\"'\'']" --include="*.ts" --include="*.js" --exclude-dir=node_modules .; then echo "Potential hardcoded secrets detected"; exit 1; fi'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+  # TypeScript specific checks
+  - repo: local
+    hooks:
+      - id: typescript-check
+        name: TypeScript Type Check
+        entry: bash -c 'cd projects/consumer-accounts-internal-api && bun run tsc --noEmit && cd ../consumer-accounts-internal-app && bun run type-check'
+        language: system
+        files: \.(ts|tsx)$
+        pass_filenames: false
+
+# Configuration
+default_stages: [commit]
+fail_fast: false
+minimum_pre_commit_version: '3.0.0'
+
+# Banking compliance: ensure all hooks run even if one fails
+# This provides comprehensive reporting for compliance audits
+ci:
+  skip: []
+  autofix_commit_msg: 'style: auto-fix pre-commit hooks [skip ci]'
+  autofix_prs: false
+  autoupdate_commit_msg: 'ci: pre-commit autoupdate [skip ci]'
+  autoupdate_schedule: monthly
