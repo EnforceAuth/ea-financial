@@ -1,0 +1,109 @@
+# Shared Environment Configuration
+# This file contains common environment variables and settings used across all workflows
+# Reference this in other workflows to maintain consistency
+
+name: Shared Environment Configuration
+
+# This is not a runnable workflow, just a configuration reference
+on:
+  workflow_call:
+    outputs:
+      node-version:
+        description: 'Node.js version to use'
+        value: ${{ jobs.config.outputs.node-version }}
+      bun-version:
+        description: 'Bun version to use'
+        value: ${{ jobs.config.outputs.bun-version }}
+      registry:
+        description: 'Container registry'
+        value: ${{ jobs.config.outputs.registry }}
+      image-name:
+        description: 'Base image name'
+        value: ${{ jobs.config.outputs.image-name }}
+      postgres-version:
+        description: 'PostgreSQL version for testing'
+        value: ${{ jobs.config.outputs.postgres-version }}
+      redis-version:
+        description: 'Redis version for testing'
+        value: ${{ jobs.config.outputs.redis-version }}
+      kubectl-version:
+        description: 'kubectl version'
+        value: ${{ jobs.config.outputs.kubectl-version }}
+      helm-version:
+        description: 'Helm version'
+        value: ${{ jobs.config.outputs.helm-version }}
+
+env:
+  # Runtime versions
+  NODE_VERSION: "20"
+  BUN_VERSION: "1.2.22"
+
+  # Container registry settings
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+  # Infrastructure tool versions
+  KUBECTL_VERSION: "v1.28.0"
+  HELM_VERSION: "3.12.0"
+
+  # Test service versions
+  POSTGRES_VERSION: "15"
+  POSTGRES_DB: ea_financial_test
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: postgres
+  REDIS_VERSION: "7-alpine"
+
+  # Build and deployment settings
+  DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1
+  BUILDX_NO_DEFAULT_ATTESTATIONS: 1
+
+  # Application specific settings
+  CI: true
+  NODE_ENV: test
+
+  # Security and compliance
+  SECURITY_SCAN_SEVERITY: "CRITICAL,HIGH,MEDIUM"
+  TRIVY_DB_REPOSITORY: "ghcr.io/aquasecurity/trivy-db"
+
+  # Performance and caching
+  PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
+  BUN_INSTALL_CACHE_DIR: ~/.bun/install/cache
+
+  # AWS/Cloud settings (defaults)
+  AWS_DEFAULT_REGION: us-east-1
+  AWS_REGION: us-east-1
+
+  # Monitoring and observability
+  GRAFANA_ANNOTATION_TAG: deployment
+
+  # Banking/Financial compliance
+  PCI_DSS_SCOPE: true
+  AUDIT_LOGGING: enabled
+  ENCRYPTION_AT_REST: required
+
+  # OPA Policy settings
+  OPA_POLICIES_PATH: infra/opa/policies
+  OPA_BUNDLE_MODE: false
+
+jobs:
+  config:
+    runs-on: ubuntu-latest
+    outputs:
+      node-version: ${{ env.NODE_VERSION }}
+      bun-version: ${{ env.BUN_VERSION }}
+      registry: ${{ env.REGISTRY }}
+      image-name: ${{ env.IMAGE_NAME }}
+      postgres-version: ${{ env.POSTGRES_VERSION }}
+      redis-version: ${{ env.REDIS_VERSION }}
+      kubectl-version: ${{ env.KUBECTL_VERSION }}
+      helm-version: ${{ env.HELM_VERSION }}
+    steps:
+      - name: Export configuration
+        run: |
+          echo "Configuration exported successfully"
+          echo "Node.js: ${{ env.NODE_VERSION }}"
+          echo "Bun: ${{ env.BUN_VERSION }}"
+          echo "Registry: ${{ env.REGISTRY }}"
+          echo "PostgreSQL: ${{ env.POSTGRES_VERSION }}"
+          echo "Redis: ${{ env.REDIS_VERSION }}"

@@ -1,10 +1,13 @@
 # EA Financial - Infrastructure Documentation
 
-This directory contains all infrastructure configuration and deployment scripts for the EA Financial Consumer Accounts system running on Minikube with EOPA (Enterprise Open Policy Agent) sidecars for centralized authorization.
+This directory contains all infrastructure configuration and deployment scripts for the
+EA Financial Consumer Accounts system running on Minikube with EOPA (Enterprise Open Policy
+Agent) sidecars for centralized authorization.
 
 ## 🏗️ Architecture Overview
 
 The infrastructure provides:
+
 - **Kubernetes deployment** on Minikube for local development
 - **EOPA sidecars** for centralized authorization and policy management
 - **Containerized applications** with Docker
@@ -14,13 +17,13 @@ The infrastructure provides:
 
 ### Components
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                        Minikube Cluster                    │
 ├─────────────────────────────────────────────────────────────┤
 │  ┌─────────────────┐    ┌──────────────────────────────┐   │
 │  │   Frontend      │    │           Backend            │   │
-│  │   (React App)   │◄───┤      (Bun/Elysia API)       │   │
+│  │   (React App)   │◄───┤      (bun/Elysia API)       │   │
 │  │   Port: 3000    │    │       Port: 3001             │   │
 │  │                 │    │                              │   │
 │  └─────────────────┘    │  ┌─────────────────────────┐ │   │
@@ -41,16 +44,16 @@ The infrastructure provides:
 
 ## 📁 Directory Structure
 
-```
+```text
 infra/
 ├── README.md                   # This file
 ├── k8s/                       # Kubernetes manifests
-│   ├── api-deployment.yaml    # API deployment with EOPA sidecar
-│   ├── app-deployment.yaml    # Frontend deployment
-│   ├── configmaps.yaml        # ConfigMaps for EOPA policies/data
-│   ├── ingress.yaml           # Ingress configuration
-│   ├── network-policies.yaml  # Network security policies
-│   └── hpa.yaml               # Horizontal Pod Autoscaler
+│   ├── API-deployment.YAML    # API deployment with EOPA sidecar
+│   ├── app-deployment.YAML    # Frontend deployment
+│   ├── configmaps.YAML        # ConfigMaps for EOPA policies/data
+│   ├── ingress.YAML           # Ingress configuration
+│   ├── network-policies.YAML  # Network security policies
+│   └── hpa.YAML               # Horizontal Pod Autoscaler
 ├── opa/                       # EOPA configuration and policies
 │   ├── Dockerfile             # EOPA container with policies
 │   ├── config/                # EOPA server configuration
@@ -68,6 +71,7 @@ infra/
 ### Prerequisites
 
 Ensure you have the following tools installed:
+
 - [Docker](https://docs.docker.com/get-docker/)
 - [Minikube](https://minikube.sigs.k8s.io/docs/start/)
 - [kubectl](https://kubernetes.io/docs/tasks/tools/)
@@ -84,6 +88,7 @@ chmod +x *.sh
 ```
 
 This will:
+
 - Start Minikube with appropriate resources
 - Create the `ea-financial` namespace
 - Build all Docker images
@@ -100,6 +105,7 @@ After successful deployment:
 - **EOPA Policy API**: http://MINIKUBE_IP:30002
 
 Get your Minikube IP:
+
 ```bash
 minikube ip
 ```
@@ -111,7 +117,7 @@ Use the monitoring script for real-time dashboard and testing:
 ```bash
 ./monitor.sh dashboard    # Live monitoring dashboard
 ./monitor.sh test-opa     # Test EOPA authorization policies
-./monitor.sh test-api     # Test API endpoints
+./monitor.sh test-API     # Test API endpoints
 ```
 
 ## 🔐 EOPA Authorization
@@ -121,11 +127,13 @@ Use the monitoring script for real-time dashboard and testing:
 The system implements a comprehensive authorization layer using EOPA with the following features:
 
 #### Policy Structure
+
 - **Package**: `main`
 - **Main Decision**: `allow` (boolean)
 - **Default**: Deny all (fail-secure)
 
 #### Authorization Flow
+
 1. **Token Extraction**: Bearer token from Authorization header
 2. **Token Validation**: Format and expiration checks
 3. **Claims Resolution**: User permissions and role mapping
@@ -165,7 +173,7 @@ Or manually test authorization:
 ```bash
 # Test valid user access
 curl -X POST http://MINIKUBE_IP:30002/v1/data/ea_financial/authz/allow \
-  -H "Content-Type: application/json" \
+  -H "Content-Type: application/JSON" \
   -d '{
     "input": {
       "request": {
@@ -208,8 +216,8 @@ Application deployment and management:
 ./deploy.sh build        # Build images only
 ./deploy.sh restart      # Restart deployments
 ./deploy.sh status       # Show deployment status
-./deploy.sh logs api     # Tail API logs
-./deploy.sh scale consumer-accounts-api 3  # Scale API to 3 replicas
+./deploy.sh logs API     # Tail API logs
+./deploy.sh scale consumer-accounts-API 3  # Scale API to 3 replicas
 ./deploy.sh update-policies  # Update EOPA policies
 ```
 
@@ -221,7 +229,7 @@ Monitoring, testing, and diagnostics:
 ./monitor.sh dashboard   # Live monitoring dashboard
 ./monitor.sh health      # Check service health
 ./monitor.sh test-opa    # Test EOPA authorization policies
-./monitor.sh test-api    # Test API endpoints
+./monitor.sh test-API    # Test API endpoints
 ./monitor.sh logs all    # Monitor all logs
 ./monitor.sh load-test 60 20  # Load test (60s, 20 concurrent)
 ./monitor.sh report      # Generate monitoring report
@@ -245,19 +253,22 @@ Infrastructure cleanup and reset:
 The system uses the following environment variables:
 
 #### API Container
+
 - `NODE_ENV`: Environment mode (production)
 - `PORT`: API port (3001)
-- `OPA_URL`: EOPA sidecar URL (http://localhost:8181)
+- `OPA_URL`: EOPA sidecar URL (<http://localhost:8181>)
 - `LOG_LEVEL`: Logging level (info)
 
 #### Frontend Container
+
 - `NODE_ENV`: Environment mode (production)
 - `REACT_APP_API_URL`: Backend API URL
 - `NGINX_WORKER_PROCESSES`: Nginx worker processes
 
 #### EOPA Container
+
 - `OPA_LOG_LEVEL`: EOPA logging level (info)
-- `OPA_LOG_FORMAT`: Log format (json)
+- `OPA_LOG_FORMAT`: Log format (JSON)
 
 ### Resource Limits
 
@@ -307,6 +318,7 @@ HPA (Horizontal Pod Autoscaler) settings:
 ### Health Checks
 
 All components include:
+
 - **Liveness Probes**: Container restart on failure
 - **Readiness Probes**: Traffic routing control
 - **Health Endpoints**: Dedicated health check endpoints
@@ -321,6 +333,7 @@ All components include:
 ### Monitoring Dashboard
 
 Real-time monitoring includes:
+
 - Service health status
 - Resource utilization
 - Pod status and events
@@ -333,27 +346,31 @@ Real-time monitoring includes:
 ### Common Issues
 
 #### Minikube Not Starting
+
 ```bash
 minikube delete
-minikube start --driver=docker --memory=8192 --cpus=4
+minikube start --driver=Docker --memory=8192 --cpus=4
 ```
 
 #### Images Not Found
+
 ```bash
-eval $(minikube docker-env)
+eval $(minikube Docker-env)
 ./setup.sh build-only
 ```
 
 #### Pods Not Ready
+
 ```bash
 kubectl describe pods -n ea-financial
-kubectl logs -f deployment/consumer-accounts-api -n ea-financial
+kubectl logs -f deployment/consumer-accounts-API -n ea-financial
 ```
 
 #### EOPA Authorization Failing
+
 ```bash
 ./monitor.sh test-opa
-kubectl logs -f -l app=consumer-accounts-api -c opa -n ea-financial
+kubectl logs -f -l app=consumer-accounts-API -c opa -n ea-financial
 ```
 
 ### Debug Commands
@@ -370,11 +387,11 @@ kubectl get events -n ea-financial --sort-by=.firstTimestamp
 
 # Test EOPA directly
 curl -X POST http://$(minikube ip):30002/v1/data/ea_financial/authz/allow \
-  -H "Content-Type: application/json" \
+  -H "Content-Type: application/JSON" \
   -d '{"input": {"request": {"http": {"method": "GET", "path": "/health"}}}}'
 
 # Port forward for local testing
-kubectl port-forward svc/consumer-accounts-api 3001:3001 -n ea-financial
+kubectl port-forward svc/consumer-accounts-API 3001:3001 -n ea-financial
 ```
 
 ## 🔄 Development Workflow
@@ -385,7 +402,7 @@ kubectl port-forward svc/consumer-accounts-api 3001:3001 -n ea-financial
 2. **Policy Changes**: Update EOPA policies in `infra/opa/`
 3. **Rebuild**: Run `./deploy.sh build`
 4. **Deploy**: Run `./deploy.sh`
-5. **Test**: Run `./monitor.sh test-api` and `./monitor.sh test-opa`
+5. **Test**: Run `./monitor.sh test-API` and `./monitor.sh test-opa`
 
 ### Updating Policies
 
@@ -398,7 +415,7 @@ kubectl port-forward svc/consumer-accounts-api 3001:3001 -n ea-financial
 
 ```bash
 # Manual scaling
-./deploy.sh scale consumer-accounts-api 5
+./deploy.sh scale consumer-accounts-API 5
 
 # Load testing
 ./monitor.sh load-test 300 50  # 5 minutes, 50 concurrent
@@ -426,4 +443,5 @@ When contributing to the infrastructure:
 
 ## 📄 License
 
-This infrastructure configuration is part of the EA Financial project and is subject to the same licensing terms as the main project.
+This infrastructure configuration is part of the EA Financial project and is subject to the same
+licensing terms as the main project.

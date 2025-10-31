@@ -14,7 +14,8 @@
     "test:offline": "./scripts/test-integration-offline.sh",
     "build": "bun build src/index.ts --outdir ./dist --target bun",
     "lint": "echo 'Add linting later'",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "banking",

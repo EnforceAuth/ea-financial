@@ -1,0 +1,25 @@
+# Ignore git and GitHub Actions
+.git
+.github
+
+# Ignore dependencies (will be installed in container)
+**/node_modules
+**/.bun
+
+# Ignore build outputs
+**/dist
+**/out
+**/build
+**/coverage
+
+# Ignore logs and temp files
+**/*.log
+**/*.tmp
+**/.DS_Store
+
+# Ignore environment files (except examples)
+.env
+.env.local
+.env.*.local
+
+# Keep everything else including projects/

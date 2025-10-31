@@ -16,7 +16,7 @@
       "department": "customer_service",
       "active": true,
       "token": "jsmith_token_123",
-      "exp": 1790858811,
+      "exp": 1793456391,
       "assigned_accounts": ["ACC001", "ACC002", "ACC003", "ACC004", "ACC005"]
     },
     "mjohnson": {
@@ -42,7 +42,7 @@
       "department": "management",
       "active": true,
       "token": "mjohnson_token_456",
-      "exp": 1790858811,
+      "exp": 1793456391,
       "assigned_accounts": ["*"]
     },
     "rbrown": {
@@ -57,21 +57,16 @@
       "department": "customer_service",
       "active": true,
       "token": "rbrown_token_789",
-      "exp": 1790858811,
+      "exp": 1793456391,
       "assigned_accounts": ["ACC001", "ACC002", "ACC003"]
     },
     "slee": {
       "role": "analyst",
-      "permissions": [
-        "accounts:read",
-        "balance:read",
-        "transactions:read",
-        "terms:read"
-      ],
+      "permissions": ["accounts:read", "balance:read", "transactions:read", "terms:read"],
       "department": "analytics",
       "active": false,
       "token": "slee_token_000",
-      "exp": 1790858811,
+      "exp": 1793456391,
       "assigned_accounts": []
     }
   },

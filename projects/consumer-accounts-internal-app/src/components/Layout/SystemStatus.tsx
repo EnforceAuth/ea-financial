@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import type React from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { apiService } from '@/services/api';
 
 interface SystemStatusProps {
@@ -20,16 +21,13 @@ interface SystemHealth {
   };
 }
 
-const SystemStatus: React.FC<SystemStatusProps> = ({
-  showDetails = false,
-  className = ''
-}) => {
+const SystemStatus: React.FC<SystemStatusProps> = ({ showDetails = false, className = '' }) => {
   const [health, setHealth] = useState<SystemHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
 
-  const checkSystemHealth = async () => {
+  const checkSystemHealth = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -42,7 +40,7 @@ const SystemStatus: React.FC<SystemStatusProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     checkSystemHealth();
@@ -51,7 +49,7 @@ const SystemStatus: React.FC<SystemStatusProps> = ({
     const interval = setInterval(checkSystemHealth, 30000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [checkSystemHealth]);
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -103,7 +101,7 @@ const SystemStatus: React.FC<SystemStatusProps> = ({
     return (
       <div className={`system-status ${className}`}>
         <div className="flex items-center space-x-2 text-gray-500">
-          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-300"></div>
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-300" />
           <span className="text-sm">Checking system status...</span>
         </div>
       </div>
@@ -119,6 +117,7 @@ const SystemStatus: React.FC<SystemStatusProps> = ({
             <span className="text-sm font-medium">System Check Failed</span>
           </div>
           <button
+            type="button"
             onClick={checkSystemHealth}
             className="text-sm text-blue-600 hover:text-blue-800 underline"
             disabled={loading}
@@ -126,11 +125,7 @@ const SystemStatus: React.FC<SystemStatusProps> = ({
             Retry
           </button>
         </div>
-        {showDetails && (
-          <div className="mt-2 text-sm text-gray-600">
-            {error}
-          </div>
-        )}
+        {showDetails && <div className="mt-2 text-sm text-gray-600">{error}</div>}
       </div>
     );
   }
@@ -150,9 +145,7 @@ const SystemStatus: React.FC<SystemStatusProps> = ({
           <div className="flex items-center space-x-1">
             <span>{getStatusIcon(health.status)}</span>
             <span className="text-sm font-medium">System</span>
-            <span className={getStatusBadgeClass(health.status)}>
-              {health.status}
-            </span>
+            <span className={getStatusBadgeClass(health.status)}>{health.status}</span>
           </div>
 
           {isOpaDown && (
@@ -165,18 +158,17 @@ const SystemStatus: React.FC<SystemStatusProps> = ({
 
         <div className="flex items-center space-x-2">
           {lastChecked && (
-            <span className="text-xs text-gray-500">
-              {lastChecked.toLocaleTimeString()}
-            </span>
+            <span className="text-xs text-gray-500">{lastChecked.toLocaleTimeString()}</span>
           )}
           <button
+            type="button"
             onClick={checkSystemHealth}
             disabled={loading}
             className="text-sm text-blue-600 hover:text-blue-800 disabled:text-gray-400"
             title="Refresh status"
           >
             {loading ? (
-              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600" />
             ) : (
               '🔄'
             )}
@@ -194,8 +186,8 @@ const SystemStatus: React.FC<SystemStatusProps> = ({
                 Authorization Service Unavailable
               </h4>
               <p className="text-sm text-red-700 mt-1">
-                The Open Policy Agent (OPA) authorization service is not responding.
-                Login and most banking operations will be unavailable until this service is restored.
+                The Open Policy Agent (OPA) authorization service is not responding. Login and most
+                banking operations will be unavailable until this service is restored.
               </p>
               <div className="mt-2 text-xs text-red-600">
                 <strong>Service URL:</strong> {health.dependencies.opa.url}
@@ -224,9 +216,7 @@ const SystemStatus: React.FC<SystemStatusProps> = ({
               </div>
               <div>
                 <span className="text-gray-500">Status:</span>
-                <span className={`ml-1 ${getStatusColor(health.status)}`}>
-                  {health.status}
-                </span>
+                <span className={`ml-1 ${getStatusColor(health.status)}`}>{health.status}</span>
               </div>
               <div>
                 <span className="text-gray-500">Last Updated:</span>
@@ -250,9 +240,7 @@ const SystemStatus: React.FC<SystemStatusProps> = ({
                 </div>
               </div>
               {health.dependencies.opa.error && (
-                <div className="text-xs text-red-600 pl-4">
-                  {health.dependencies.opa.error}
-                </div>
+                <div className="text-xs text-red-600 pl-4">{health.dependencies.opa.error}</div>
               )}
             </div>
           </div>
@@ -260,7 +248,8 @@ const SystemStatus: React.FC<SystemStatusProps> = ({
           {systemDegraded && (
             <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
               <div className="text-sm text-yellow-800">
-                <strong>System Running in Degraded Mode</strong><br />
+                <strong>System Running in Degraded Mode</strong>
+                <br />
                 Some services may be unavailable or operating with reduced functionality.
               </div>
             </div>

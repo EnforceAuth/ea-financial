@@ -1,6 +1,13 @@
-import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { User, LoginCredentials, AuthContextType } from '@/types';
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useReducer,
+} from 'react';
 import { apiService } from '@/services/api';
+import type { AuthContextType, LoginCredentials, User } from '@/types';
 
 // Auth State
 interface AuthState {
@@ -144,16 +151,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const logout = async (): Promise<void> => {
     try {
       await apiService.logout();
-    } catch (error) {
-      // Log error but still proceed with local logout
-      console.warn('Logout request failed:', error);
+    } catch (_error) {
+      // Logout request failed - continuing with local logout anyway
     } finally {
       dispatch({ type: 'LOGOUT' });
     }
   };
 
   // Verify token on app start
-  const verifyToken = async (): Promise<void> => {
+  const verifyToken = useCallback(async (): Promise<void> => {
     const token = apiService.getToken();
 
     if (!token) {
@@ -164,21 +170,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       const user = await apiService.verifyToken();
       dispatch({ type: 'VERIFY_SUCCESS', payload: user });
-    } catch (error) {
-      console.warn('Token verification failed:', error);
+    } catch (_error) {
       dispatch({ type: 'VERIFY_FAILURE' });
     }
-  };
-
-  // Clear error function
-  const clearError = (): void => {
-    dispatch({ type: 'CLEAR_ERROR' });
-  };
+  }, []);
 
   // Effect to verify token on mount
   useEffect(() => {
     verifyToken();
-  }, []);
+  }, [verifyToken]);
 
   // Context value
   const contextValue: AuthContextType = {
@@ -190,11 +190,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     loading: state.loading,
   };
 
-  return (
-    <AuthContext.Provider value={contextValue}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
 }
 
 // Custom hook to use auth context
@@ -218,7 +214,7 @@ interface RequireAuthProps {
 export function RequireAuth({
   children,
   fallback = <div>Access Denied</div>,
-  requiredPermissions = []
+  requiredPermissions = [],
 }: RequireAuthProps) {
   const { isAuthenticated, user, loading } = useAuth();
 
