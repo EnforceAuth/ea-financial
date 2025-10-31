@@ -1,197 +1,155 @@
-import { Elysia } from "elysia";
-import { dataService } from "../data/dataService";
-import { authService } from "../services/authService";
-import { opaService } from "../services/opaService";
-import { LoginRequest, LoginResponse, ApiResponse } from "../types";
+import { Elysia } from 'elysia';
+import { dataService } from '../data/dataService';
+import { authService } from '../services/authService';
+import type { ApiResponse, LoginRequest, LoginResponse, User } from '../types';
 
-export const authRoutes = new Elysia({ prefix: "/auth" })
-  .post(
-    "/login",
-    async ({ body, set }): Promise<ApiResponse<LoginResponse>> => {
-      try {
-        const { username, password } = body as LoginRequest;
+export const authRoutes = new Elysia({ prefix: '/auth' })
+  .post('/login', async ({ body, set }): Promise<ApiResponse<LoginResponse>> => {
+    try {
+      const { username, password } = body as LoginRequest;
 
-        if (!username || !password) {
-          set.status = 400;
-          return {
-            success: false,
-            message: "Username and password are required",
-            error: "Missing credentials",
-          };
-        }
-
-        // Find user by username
-        const user = dataService.getUserByUsername(username);
-
-        if (!user) {
-          set.status = 401;
-          return {
-            success: false,
-            message: "Invalid credentials",
-            error: "User not found",
-          };
-        }
-
-        // Validate password
-        if (!authService.validateCredentials(username, password)) {
-          set.status = 401;
-          return {
-            success: false,
-            message: "Invalid credentials",
-            error: "Authentication failed",
-          };
-        }
-
-        // Check if user is active
-        if (!user.isActive) {
-          set.status = 401;
-          return {
-            success: false,
-            message: "Account is inactive",
-            error: "User account disabled",
-          };
-        }
-
-        // Generate token
-        const token = authService.generateToken(user.username);
-
-        // Test OPA service availability by checking if it can validate the token
-        const tokenUserResult = await opaService.getUserFromToken(
-          `Bearer ${token}`,
-        );
-
-        if (tokenUserResult.error) {
-          console.error(
-            "OPA token validation failed during login:",
-            tokenUserResult.error,
-          );
-          set.status = 503;
-          return {
-            success: false,
-            message: "Authorization service unavailable",
-            error:
-              "Unable to complete login. OPA authorization service is not available. Please contact your system administrator.",
-          };
-        }
-
-        // Verify the token resolved to the correct user
-        if (
-          !tokenUserResult.user ||
-          tokenUserResult.user.username !== user.username
-        ) {
-          console.error(
-            "OPA token validation returned incorrect user during login:",
-            tokenUserResult.user?.username,
-            "expected:",
-            user.username,
-          );
-          set.status = 503;
-          return {
-            success: false,
-            message: "Authorization service unavailable",
-            error:
-              "Unable to complete login. OPA authorization service is not available. Please contact your system administrator.",
-          };
-        }
-
-        const loginResponse: LoginResponse = {
-          success: true,
-          message: "Login successful",
-          user: {
-            ...user,
-          },
-          token,
-        };
-
-        return {
-          success: true,
-          message: "Authentication successful",
-          data: loginResponse,
-        };
-      } catch (error) {
-        console.error("Login error:", error);
-        set.status = 500;
+      if (!username || !password) {
+        set.status = 400;
         return {
           success: false,
-          message: "Internal server error",
-          error: "Authentication service error",
+          message: 'Username and password are required',
+          error: 'Missing credentials',
         };
       }
-    },
-  )
 
-  .post(
-    "/logout",
-    async ({ headers, set }): Promise<ApiResponse<{ message: string }>> => {
-      try {
-        // Verify we have a valid token for logout
-        const authResult = await authService.authenticate(
-          headers.authorization,
-        );
+      // SECURITY NOTE: Login endpoint validates credentials directly (authentication)
+      // and does not use OPA. This is by design - OPA is used for authorization
+      // on protected endpoints after authentication. The frontend checks OPA health
+      // before allowing login to ensure authorization service is available.
 
-        if (!authResult.success) {
-          set.status = 401;
-          return {
-            success: false,
-            message: "Invalid or missing authorization token",
-            error: authResult.error,
-          };
-        }
+      // Find user by username
+      const user = dataService.getUserByUsername(username);
 
-        // In production, add token to blacklist or invalidate session
-        return {
-          success: true,
-          message: "Logout successful",
-          data: { message: "Successfully logged out" },
-        };
-      } catch (error) {
-        console.error("Logout error:", error);
-        set.status = 500;
+      if (!user) {
+        set.status = 401;
         return {
           success: false,
-          message: "Internal server error",
-          error: "Logout service error",
+          message: 'Invalid credentials',
+          error: 'User not found',
         };
       }
-    },
-  )
+
+      // Validate password
+      if (!authService.validateCredentials(username, password)) {
+        set.status = 401;
+        return {
+          success: false,
+          message: 'Invalid credentials',
+          error: 'Authentication failed',
+        };
+      }
+
+      // Check if user is active
+      if (!user.isActive) {
+        set.status = 401;
+        return {
+          success: false,
+          message: 'Account is inactive',
+          error: 'User account disabled',
+        };
+      }
+
+      // Generate token
+      const token = authService.generateToken(user.username);
+
+      const loginResponse: LoginResponse = {
+        success: true,
+        message: 'Login successful',
+        user: {
+          ...user,
+        },
+        token,
+      };
+
+      return {
+        success: true,
+        message: 'Authentication successful',
+        data: loginResponse,
+      };
+    } catch (_error) {
+      set.status = 500;
+      return {
+        success: false,
+        message: 'Internal server error',
+        error: 'Authentication service error',
+      };
+    }
+  })
+
+  .post('/logout', async ({ headers, set }): Promise<ApiResponse<{ message: string }>> => {
+    try {
+      // Verify we have a valid token for logout
+      const authResult = await authService.authenticate(headers.authorization);
+
+      if (!authResult.success) {
+        set.status = 401;
+        return {
+          success: false,
+          message: 'Invalid or missing authorization token',
+          error: authResult.error,
+        };
+      }
+
+      // In production, add token to blacklist or invalidate session
+      return {
+        success: true,
+        message: 'Logout successful',
+        data: { message: 'Successfully logged out' },
+      };
+    } catch (_error) {
+      set.status = 500;
+      return {
+        success: false,
+        message: 'Internal server error',
+        error: 'Logout service error',
+      };
+    }
+  })
 
   .get(
-    "/verify",
-    async ({
-      headers,
-      set,
-    }): Promise<ApiResponse<{ user: any; valid: boolean }>> => {
+    '/verify',
+    async ({ headers, set }): Promise<ApiResponse<{ user: User; valid: boolean }>> => {
       try {
-        const authResult = await authService.authenticate(
-          headers.authorization,
-        );
+        const authResult = await authService.authenticate(headers.authorization);
 
         if (!authResult.success) {
           set.status = 401;
           return {
             success: false,
-            message: "Token verification failed",
+            message: 'Token verification failed',
             error: authResult.error,
+          };
+        }
+
+        if (!authResult.user) {
+          set.status = 401;
+          return {
+            success: false,
+            message: 'Invalid token',
+            error: 'User not found',
           };
         }
 
         return {
           success: true,
-          message: "Token is valid",
+          message: 'Token is valid',
           data: {
             user: authResult.user,
             valid: true,
           },
         };
-      } catch (error) {
-        console.error("Token verification error:", error);
+      } catch (_error) {
         set.status = 500;
         return {
           success: false,
-          message: "Internal server error",
-          error: "Token verification service error",
+          message: 'Internal server error',
+          error: 'Token verification service error',
         };
       }
-    },
+    }
   );

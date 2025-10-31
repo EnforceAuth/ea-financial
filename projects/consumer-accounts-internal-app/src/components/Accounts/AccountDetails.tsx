@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import type React from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { usePermissions } from '@/context/AuthContext';
-import { PERMISSIONS, Account, AccountBalance, TransactionHistory } from '@/types';
 import { apiService } from '@/services/api';
+import { type Account, type AccountBalance, PERMISSIONS, type TransactionHistory } from '@/types';
 
 interface AccountDetailsState {
   account: Account | null;
@@ -27,6 +28,58 @@ const AccountDetails: React.FC = () => {
     refreshing: false,
   });
 
+  const loadAccountData = useCallback(
+    async (id: string) => {
+      try {
+        setState(prev => ({ ...prev, loading: true, error: null }));
+
+        // Load account details and balance in parallel
+        const [accountData, balanceData] = await Promise.all([
+          apiService.getAccount(id),
+          apiService.getAccountBalance(id),
+        ]);
+
+        // Load recent transactions if user has permission
+        let transactionsData = null;
+        if (hasPermission(PERMISSIONS.VIEW_TRANSACTIONS)) {
+          try {
+            transactionsData = await apiService.getTransactionHistory(id, {
+              page: 1,
+              limit: 5,
+            });
+          } catch (_error) {
+            // Silently ignore transaction loading errors - not critical
+          }
+        }
+
+        setState(prev => ({
+          ...prev,
+          account: accountData,
+          balance: balanceData,
+          recentTransactions: transactionsData,
+          loading: false,
+        }));
+      } catch (error) {
+        setState(prev => ({
+          ...prev,
+          loading: false,
+          error: error instanceof Error ? error.message : 'Failed to load account data',
+        }));
+      }
+    },
+    [hasPermission]
+  );
+
+  const handleRefresh = async () => {
+    if (!accountId) {
+      return;
+    }
+
+    setState(prev => ({ ...prev, refreshing: true }));
+    await loadAccountData(accountId);
+    setState(prev => ({ ...prev, refreshing: false }));
+  };
+
   useEffect(() => {
     if (accountId) {
       loadAccountData(accountId);
@@ -37,51 +90,7 @@ const AccountDetails: React.FC = () => {
         error: 'No account ID provided',
       }));
     }
-  }, [accountId]);
-
-  const loadAccountData = async (id: string) => {
-    try {
-      setState(prev => ({ ...prev, loading: true, error: null }));
-
-      // Load account details and balance in parallel
-      const [accountData, balanceData] = await Promise.all([
-        apiService.getAccount(id),
-        apiService.getAccountBalance(id),
-      ]);
-
-      // Load recent transactions if user has permission
-      let transactionsData = null;
-      if (hasPermission(PERMISSIONS.VIEW_TRANSACTIONS)) {
-        try {
-          transactionsData = await apiService.getTransactionHistory(id, { page: 1, limit: 5 });
-        } catch (error) {
-          console.warn('Failed to load transactions:', error);
-        }
-      }
-
-      setState(prev => ({
-        ...prev,
-        account: accountData,
-        balance: balanceData,
-        recentTransactions: transactionsData,
-        loading: false,
-      }));
-    } catch (error) {
-      setState(prev => ({
-        ...prev,
-        loading: false,
-        error: error instanceof Error ? error.message : 'Failed to load account data',
-      }));
-    }
-  };
-
-  const handleRefresh = async () => {
-    if (!accountId) return;
-
-    setState(prev => ({ ...prev, refreshing: true }));
-    await loadAccountData(accountId);
-    setState(prev => ({ ...prev, refreshing: false }));
-  };
+  }, [accountId, loadAccountData]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -140,7 +149,7 @@ const AccountDetails: React.FC = () => {
   if (state.loading) {
     return (
       <div className="account-details-loading">
-        <div className="loading-spinner"></div>
+        <div className="loading-spinner" />
         <p>Loading account details...</p>
       </div>
     );
@@ -154,11 +163,19 @@ const AccountDetails: React.FC = () => {
           <h2>Error Loading Account</h2>
           <p>{state.error}</p>
           <div className="error-actions">
-            <button onClick={() => navigate('/dashboard')} className="secondary-button">
+            <button
+              type="button"
+              onClick={() => navigate('/dashboard')}
+              className="secondary-button"
+            >
               Return to Dashboard
             </button>
             {accountId && (
-              <button onClick={() => loadAccountData(accountId)} className="primary-button">
+              <button
+                type="button"
+                onClick={() => loadAccountData(accountId)}
+                className="primary-button"
+              >
                 Try Again
               </button>
             )}
@@ -175,7 +192,7 @@ const AccountDetails: React.FC = () => {
           <div className="not-found-icon">🔍</div>
           <h2>Account Not Found</h2>
           <p>The requested account could not be found.</p>
-          <button onClick={() => navigate('/dashboard')} className="primary-button">
+          <button type="button" onClick={() => navigate('/dashboard')} className="primary-button">
             Return to Dashboard
           </button>
         </div>
@@ -190,6 +207,7 @@ const AccountDetails: React.FC = () => {
       <div className="account-details-header">
         <div className="header-left">
           <button
+            type="button"
             onClick={() => navigate('/dashboard')}
             className="back-button"
             aria-label="Back to Dashboard"
@@ -197,18 +215,20 @@ const AccountDetails: React.FC = () => {
             ← Back
           </button>
           <div className="account-title">
-            <div className="account-icon">
-              {getAccountTypeIcon(account.accountType)}
-            </div>
+            <div className="account-icon">{getAccountTypeIcon(account.accountType)}</div>
             <div className="account-info">
               <h1>{account.customerName}'s Account</h1>
-              <p>{account.accountNumber} • {account.accountType.charAt(0).toUpperCase() + account.accountType.slice(1)}</p>
+              <p>
+                {account.accountNumber} •{' '}
+                {account.accountType.charAt(0).toUpperCase() + account.accountType.slice(1)}
+              </p>
             </div>
           </div>
         </div>
 
         <div className="header-right">
           <button
+            type="button"
             onClick={handleRefresh}
             disabled={state.refreshing}
             className="refresh-button"
@@ -227,55 +247,56 @@ const AccountDetails: React.FC = () => {
             <div className="info-card">
               <div className="info-grid">
                 <div className="info-item">
-                  <label>Account ID</label>
-                  <value>{account.accountId}</value>
+                  <span className="info-label">Account ID</span>
+                  <div className="info-value">{account.accountId}</div>
                 </div>
                 <div className="info-item">
-                  <label>Account Number</label>
-                  <value>{account.accountNumber}</value>
+                  <span className="info-label">Account Number</span>
+                  <div className="info-value">{account.accountNumber}</div>
                 </div>
                 <div className="info-item">
-                  <label>Customer ID</label>
-                  <value>{account.customerId}</value>
+                  <span className="info-label">Customer ID</span>
+                  <div className="info-value">{account.customerId}</div>
                 </div>
                 <div className="info-item">
-                  <label>Customer Name</label>
-                  <value>{account.customerName}</value>
+                  <span className="info-label">Customer Name</span>
+                  <div className="info-value">{account.customerName}</div>
                 </div>
                 <div className="info-item">
-                  <label>Account Type</label>
-                  <value>
-                    {getAccountTypeIcon(account.accountType)} {account.accountType.charAt(0).toUpperCase() + account.accountType.slice(1)}
-                  </value>
+                  <span className="info-label">Account Type</span>
+                  <div className="info-value">
+                    {getAccountTypeIcon(account.accountType)}{' '}
+                    {account.accountType.charAt(0).toUpperCase() + account.accountType.slice(1)}
+                  </div>
                 </div>
                 <div className="info-item">
-                  <label>Status</label>
-                  <value>{getStatusBadge(account.status)}</value>
+                  <span className="info-label">Status</span>
+                  <div className="info-value">{getStatusBadge(account.status)}</div>
                 </div>
                 <div className="info-item">
-                  <label>Open Date</label>
-                  <value>{formatDate(account.openDate)}</value>
+                  <span className="info-label">Open Date</span>
+                  <div className="info-value">{formatDate(account.openDate)}</div>
                 </div>
                 <div className="info-item">
-                  <label>Last Activity</label>
-                  <value>{formatDate(account.lastActivity)}</value>
+                  <span className="info-label">Last Activity</span>
+                  <div className="info-value">{formatDate(account.lastActivity)}</div>
                 </div>
                 {account.interestRate && (
                   <div className="info-item">
-                    <label>Interest Rate</label>
-                    <value>{(account.interestRate * 100).toFixed(2)}%</value>
+                    <span className="info-label">Interest Rate</span>
+                    <div className="info-value">{(account.interestRate * 100).toFixed(2)}%</div>
                   </div>
                 )}
                 {account.creditLimit && (
                   <div className="info-item">
-                    <label>Credit Limit</label>
-                    <value>{formatCurrency(account.creditLimit)}</value>
+                    <span className="info-label">Credit Limit</span>
+                    <div className="info-value">{formatCurrency(account.creditLimit)}</div>
                   </div>
                 )}
                 {account.minimumBalance && (
                   <div className="info-item">
-                    <label>Minimum Balance</label>
-                    <value>{formatCurrency(account.minimumBalance)}</value>
+                    <span className="info-label">Minimum Balance</span>
+                    <div className="info-value">{formatCurrency(account.minimumBalance)}</div>
                   </div>
                 )}
               </div>
@@ -288,17 +309,23 @@ const AccountDetails: React.FC = () => {
             <div className="balance-card">
               <div className="balance-main">
                 <div className="balance-item current-balance">
-                  <label>Current Balance</label>
-                  <value className="balance-amount">{formatCurrency(balance.currentBalance)}</value>
+                  <span className="info-label">Current Balance</span>
+                  <div className="info-value balance-amount">
+                    {formatCurrency(balance.currentBalance)}
+                  </div>
                 </div>
                 <div className="balance-item available-balance">
-                  <label>Available Balance</label>
-                  <value className="balance-amount">{formatCurrency(balance.availableBalance)}</value>
+                  <span className="info-label">Available Balance</span>
+                  <div className="info-value balance-amount">
+                    {formatCurrency(balance.availableBalance)}
+                  </div>
                 </div>
                 {balance.pendingTransactions > 0 && (
                   <div className="balance-item pending-transactions">
-                    <label>Pending Transactions</label>
-                    <value className="pending-amount">{formatCurrency(balance.pendingTransactions)}</value>
+                    <span className="info-label">Pending Transactions</span>
+                    <div className="info-value pending-amount">
+                      {formatCurrency(balance.pendingTransactions)}
+                    </div>
                   </div>
                 )}
               </div>
@@ -334,6 +361,7 @@ const AccountDetails: React.FC = () => {
                 )}
 
                 <button
+                  type="button"
                   onClick={handleRefresh}
                   disabled={state.refreshing}
                   className="action-button secondary"
@@ -351,22 +379,21 @@ const AccountDetails: React.FC = () => {
               <h2>Recent Transactions</h2>
               <div className="transactions-card">
                 <div className="transactions-list">
-                  {recentTransactions.transactions.slice(0, 5).map((transaction) => (
+                  {recentTransactions.transactions.slice(0, 5).map(transaction => (
                     <div key={transaction.transactionId} className="transaction-item">
                       <div className="transaction-icon">
                         {transaction.type === 'credit' ? '💰' : '💸'}
                       </div>
                       <div className="transaction-details">
-                        <div className="transaction-description">
-                          {transaction.description}
-                        </div>
+                        <div className="transaction-description">{transaction.description}</div>
                         <div className="transaction-meta">
                           {formatDate(transaction.timestamp)} • Ref: {transaction.reference}
                         </div>
                       </div>
                       <div className="transaction-amount">
                         <span className={`amount ${transaction.type}`}>
-                          {transaction.type === 'credit' ? '+' : '-'}{formatCurrency(transaction.amount)}
+                          {transaction.type === 'credit' ? '+' : '-'}
+                          {formatCurrency(transaction.amount)}
                         </span>
                         <div className="balance-after">
                           Balance: {formatCurrency(transaction.balanceAfter)}

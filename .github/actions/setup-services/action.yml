@@ -1,0 +1,218 @@
+name: Setup Test Services
+
+description: Sets up test databases, cache services, and external dependencies
+
+inputs:
+  postgres-version:
+    description: 'PostgreSQL version to use'
+    required: false
+    default: '15'
+  postgres-db:
+    description: 'PostgreSQL database name'
+    required: false
+    default: 'ea_financial_test'
+  postgres-user:
+    description: 'PostgreSQL username'
+    required: false
+    default: 'postgres'
+  postgres-password:
+    description: 'PostgreSQL password'
+    required: false
+    default: 'postgres'
+  redis-version:
+    description: 'Redis version to use'
+    required: false
+    default: '7-alpine'
+  setup-opa:
+    description: 'Whether to setup OPA server'
+    required: false
+    default: 'false'
+  opa-policies-path:
+    description: 'Path to OPA policies directory'
+    required: false
+    default: 'infra/opa/policies'
+  wait-for-services:
+    description: 'Whether to wait for services to be ready'
+    required: false
+    default: 'true'
+  service-timeout:
+    description: 'Timeout in seconds to wait for services'
+    required: false
+    default: '60'
+
+outputs:
+  postgres-url:
+    description: 'PostgreSQL connection URL'
+    value: ${{ steps.service-urls.outputs.postgres-url }}
+  redis-url:
+    description: 'Redis connection URL'
+    value: ${{ steps.service-urls.outputs.redis-url }}
+  opa-url:
+    description: 'OPA server URL'
+    value: ${{ steps.service-urls.outputs.opa-url }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Start PostgreSQL service
+      shell: bash
+      run: |
+        echo "Starting PostgreSQL ${{ inputs.postgres-version }}..."
+        docker run -d \
+          --name postgres-test \
+          --health-cmd pg_isready \
+          --health-interval 10s \
+          --health-timeout 5s \
+          --health-retries 5 \
+          -e POSTGRES_PASSWORD=${{ inputs.postgres-password }} \
+          -e POSTGRES_USER=${{ inputs.postgres-user }} \
+          -e POSTGRES_DB=${{ inputs.postgres-db }} \
+          -p 5432:5432 \
+          postgres:${{ inputs.postgres-version }}
+
+    - name: Start Redis service
+      shell: bash
+      run: |
+        echo "Starting Redis ${{ inputs.redis-version }}..."
+        docker run -d \
+          --name redis-test \
+          --health-cmd "redis-cli ping" \
+          --health-interval 10s \
+          --health-timeout 5s \
+          --health-retries 5 \
+          -p 6379:6379 \
+          redis:${{ inputs.redis-version }}
+
+    - name: Start OPA server
+      if: inputs.setup-opa == 'true'
+      shell: bash
+      run: |
+        echo "Starting OPA server..."
+        if [ -d "${{ inputs.opa-policies-path }}" ]; then
+          docker run -d \
+            --name opa-test \
+            -p 8181:8181 \
+            -v $(pwd)/${{ inputs.opa-policies-path }}:/policies \
+            openpolicyagent/opa:latest-envoy \
+            run --server --addr 0.0.0.0:8181 /policies
+        else
+          echo "Warning: OPA policies directory not found at ${{ inputs.opa-policies-path }}"
+          docker run -d \
+            --name opa-test \
+            -p 8181:8181 \
+            openpolicyagent/opa:latest-envoy \
+            run --server --addr 0.0.0.0:8181
+        fi
+
+    - name: Wait for services to be ready
+      if: inputs.wait-for-services == 'true'
+      shell: bash
+      run: |
+        echo "Waiting for services to be ready..."
+        TIMEOUT=${{ inputs.service-timeout }}
+        ELAPSED=0
+
+        # Wait for PostgreSQL
+        echo "Waiting for PostgreSQL..."
+        while ! docker exec postgres-test pg_isready -U ${{ inputs.postgres-user }} > /dev/null 2>&1; do
+          if [ $ELAPSED -ge $TIMEOUT ]; then
+            echo "PostgreSQL failed to start within ${TIMEOUT} seconds"
+            docker logs postgres-test
+            exit 1
+          fi
+          sleep 2
+          ELAPSED=$((ELAPSED + 2))
+        done
+        echo "✅ PostgreSQL is ready"
+
+        # Wait for Redis
+        echo "Waiting for Redis..."
+        ELAPSED=0
+        while ! docker exec redis-test redis-cli ping > /dev/null 2>&1; do
+          if [ $ELAPSED -ge $TIMEOUT ]; then
+            echo "Redis failed to start within ${TIMEOUT} seconds"
+            docker logs redis-test
+            exit 1
+          fi
+          sleep 2
+          ELAPSED=$((ELAPSED + 2))
+        done
+        echo "✅ Redis is ready"
+
+        # Wait for OPA if enabled
+        if [ "${{ inputs.setup-opa }}" = "true" ]; then
+          echo "Waiting for OPA..."
+          ELAPSED=0
+          while ! curl -s http://localhost:8181/health > /dev/null 2>&1; do
+            if [ $ELAPSED -ge $TIMEOUT ]; then
+              echo "OPA failed to start within ${TIMEOUT} seconds"
+              docker logs opa-test
+              exit 1
+            fi
+            sleep 2
+            ELAPSED=$((ELAPSED + 2))
+          done
+          echo "✅ OPA is ready"
+        fi
+
+        echo "All services are ready!"
+
+    - name: Set service URLs
+      id: service-urls
+      shell: bash
+      run: |
+        POSTGRES_URL="postgresql://${{ inputs.postgres-user }}:${{ inputs.postgres-password }}@localhost:5432/${{ inputs.postgres-db }}"
+        REDIS_URL="redis://localhost:6379"
+        OPA_URL="http://localhost:8181"
+
+        echo "postgres-url=$POSTGRES_URL" >> $GITHUB_OUTPUT
+        echo "redis-url=$REDIS_URL" >> $GITHUB_OUTPUT
+        echo "opa-url=$OPA_URL" >> $GITHUB_OUTPUT
+
+        # Also set as environment variables for subsequent steps
+        echo "DATABASE_URL=$POSTGRES_URL" >> $GITHUB_ENV
+        echo "REDIS_URL=$REDIS_URL" >> $GITHUB_ENV
+        echo "OPA_URL=$OPA_URL" >> $GITHUB_ENV
+
+    - name: Create test databases and schemas
+      shell: bash
+      run: |
+        echo "Setting up test database schema..."
+
+        # Wait a moment for PostgreSQL to be fully ready
+        sleep 5
+
+        # Run any database migrations or schema setup
+        if [ -f "scripts/setup-test-db.sql" ]; then
+          docker exec -i postgres-test psql -U ${{ inputs.postgres-user }} -d ${{ inputs.postgres-db }} < scripts/setup-test-db.sql
+          echo "✅ Test database schema created"
+        else
+          echo "No test database setup script found at scripts/setup-test-db.sql"
+        fi
+
+    - name: Display service information
+      shell: bash
+      run: |
+        echo "🗄️ Test Services Information:"
+        echo "================================"
+        echo "PostgreSQL:"
+        echo "  - URL: postgresql://${{ inputs.postgres-user }}:***@localhost:5432/${{ inputs.postgres-db }}"
+        echo "  - Container: postgres-test"
+        echo "  - Version: ${{ inputs.postgres-version }}"
+        echo ""
+        echo "Redis:"
+        echo "  - URL: redis://localhost:6379"
+        echo "  - Container: redis-test"
+        echo "  - Version: ${{ inputs.redis-version }}"
+
+        if [ "${{ inputs.setup-opa }}" = "true" ]; then
+          echo ""
+          echo "OPA:"
+          echo "  - URL: http://localhost:8181"
+          echo "  - Container: opa-test"
+          echo "  - Policies: ${{ inputs.opa-policies-path }}"
+        fi
+
+        echo ""
+        echo "Container Status:"
+        docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" --filter "name=postgres-test" --filter "name=redis-test" --filter "name=opa-test"
