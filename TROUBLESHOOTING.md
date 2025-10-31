@@ -212,7 +212,7 @@ curl -s http://localhost:3001/status | jq .
    ```bash
    ./app.sh status           # Check all services
    ```
-   - Visit http://localhost:3000
+   - Visit `http://localhost:3000` in your browser
    - Should see green "All Systems Operational" banner
    - Demo login should work
 

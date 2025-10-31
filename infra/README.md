@@ -98,17 +98,16 @@ This will:
 
 ### 2. Access Applications
 
-After successful deployment:
-
-- **Frontend App**: http://MINIKUBE_IP:30000
-- **API Service**: http://MINIKUBE_IP:30001
-- **EOPA Policy API**: http://MINIKUBE_IP:30002
-
-Get your Minikube IP:
+After successful deployment, get your Minikube IP and access the services:
 
 ```bash
 minikube ip
 ```
+
+Then visit:
+- **Frontend App**: `http://MINIKUBE_IP:30000` (replace MINIKUBE_IP with actual IP)
+- **API Service**: `http://MINIKUBE_IP:30001`
+- **EOPA Policy API**: `http://MINIKUBE_IP:30002`
 
 ### 3. Monitor and Test
 
