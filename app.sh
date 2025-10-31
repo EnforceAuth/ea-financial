@@ -44,6 +44,31 @@ check_port() {
     fi
 }
 
+# Function to validate AWS credentials
+validate_aws_credentials() {
+    if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+        echo -e "${YELLOW}⚠️  AWS credentials not set - OPA will fail to fetch bundle from S3${NC}"
+        echo -e "${YELLOW}   Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in .env file${NC}"
+    else
+        echo -e "${GREEN}✅ AWS credentials loaded${NC}"
+        if [ -z "$AWS_REGION" ]; then
+            echo -e "${YELLOW}⚠️  AWS_REGION not set - using default region${NC}"
+        fi
+    fi
+}
+
+# Function to validate and display S3 bundle path
+validate_s3_bundle_path() {
+    local bucket="${OPA_BUNDLE_BUCKET:-ea-financial-demo-policy}"
+    local path="${OPA_BUNDLE_PATH:-policies/ea-financial/bundle.tar.gz}"
+
+    if [[ -n "$OPA_BUNDLE_BUCKET" && "$OPA_BUNDLE_BUCKET" =~ [^a-z0-9.-] ]]; then
+        echo -e "${YELLOW}⚠️  Warning: OPA_BUNDLE_BUCKET contains invalid characters for S3 bucket names${NC}"
+    fi
+
+    echo -e "${CYAN}   Fetching bundle from S3: s3://${bucket}/${path}${NC}"
+}
+
 # Function to start OPA service
 start_opa() {
     echo -e "${BLUE}🔐 Starting OPA Authorization Service (with S3 bundle support)...${NC}"
@@ -60,13 +85,8 @@ start_opa() {
         return 1
     fi
 
-    # Check if AWS credentials are set
-    if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
-        echo -e "${YELLOW}⚠️  AWS credentials not set - OPA will fail to fetch bundle from S3${NC}"
-        echo -e "${YELLOW}   Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in .env file${NC}"
-    else
-        echo -e "${GREEN}✅ AWS credentials loaded${NC}"
-    fi
+    # Check AWS credentials
+    validate_aws_credentials
 
     # Start OPA in background with config file
     opa run --server \
@@ -76,7 +96,7 @@ start_opa() {
 
     local opa_pid=$!
     echo -e "${GREEN}✅ OPA started (PID: $opa_pid)${NC}"
-    echo -e "${CYAN}   Fetching bundle from S3: s3://${OPA_BUNDLE_BUCKET:-ea-financial-demo-policy}/${OPA_BUNDLE_PATH:-policies/ea-financial/bundle.tar.gz}${NC}"
+    validate_s3_bundle_path
 
     # Wait for OPA to be ready
     echo -e "${BLUE}⏳ Waiting for OPA to be ready...${NC}"
@@ -110,13 +130,8 @@ start_eopa() {
         return 1
     fi
 
-    # Check if AWS credentials are set
-    if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
-        echo -e "${YELLOW}⚠️  AWS credentials not set - OPA will fail to fetch bundle from S3${NC}"
-        echo -e "${YELLOW}   Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in .env file${NC}"
-    else
-        echo -e "${GREEN}✅ AWS credentials loaded${NC}"
-    fi
+    # Check AWS credentials
+    validate_aws_credentials
 
     # Start EOPA with enhanced logging and audit features
     opa run --server \
@@ -129,7 +144,7 @@ start_eopa() {
 
     local eopa_pid=$!
     echo -e "${GREEN}✅ EOPA started with enhanced features (PID: $eopa_pid)${NC}"
-    echo -e "${CYAN}   Fetching bundle from S3: s3://${OPA_BUNDLE_BUCKET:-ea-financial-demo-policy}/${OPA_BUNDLE_PATH:-policies/ea-financial/bundle.tar.gz}${NC}"
+    validate_s3_bundle_path
 
     # Wait for EOPA to be ready
     echo -e "${BLUE}⏳ Waiting for EOPA to be ready...${NC}"
