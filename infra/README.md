@@ -105,6 +105,7 @@ minikube ip
 ```
 
 Then visit:
+
 - **Frontend App**: `http://MINIKUBE_IP:30000` (replace MINIKUBE_IP with actual IP)
 - **API Service**: `http://MINIKUBE_IP:30001`
 - **EOPA Policy API**: `http://MINIKUBE_IP:30002`
