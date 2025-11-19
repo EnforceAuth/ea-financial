@@ -469,12 +469,26 @@ allow if {
 # AUDIT LOGGING
 # ========================================
 
-# Aggregate audit logs from all systems
+# Aggregate audit logs from all systems - retail
 logs := {
 	"retail": retail_compliance.log_decision,
-	"commercial": commercial_compliance.log_commercial_transaction,
-	"wealth": wealth_compliance.log_wealth_transaction,
 	"common": common.audit_log(user_claims, allow),
 } if {
 	user_claims := retail_auth.authenticated_claims
+}
+
+# Aggregate audit logs - commercial
+logs := {
+	"commercial": commercial_compliance.log_commercial_transaction,
+	"common": common.audit_log(user_claims, allow),
+} if {
+	user_claims := commercial_auth.authenticated_claims
+}
+
+# Aggregate audit logs - wealth management
+logs := {
+	"wealth": wealth_compliance.log_wealth_transaction,
+	"common": common.audit_log(user_claims, allow),
+} if {
+	user_claims := wealth_auth.authenticated_claims
 }

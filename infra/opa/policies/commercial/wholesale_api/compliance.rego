@@ -15,7 +15,9 @@ kyc_verification_required if {
 # Enhanced due diligence for high-risk clients
 edd_required if {
 	user_claims := authentication.authenticated_claims
+	user_claims.client_id != null
 	client := data.clients[user_claims.client_id]
+	client != null
 	client.risk_rating in ["high", "medium-high"]
 }
 

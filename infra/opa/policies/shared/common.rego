@@ -81,10 +81,26 @@ within_business_hours if {
 
 # Audit log structure
 audit_log(user_claims, allowed) := log if {
+	user_claims != null
 	log := {
 		"timestamp": time.now_ns(),
 		"user": user_claims.sub,
 		"role": user_claims.role,
+		"method": input.request.http.method,
+		"path": input.request.http.path,
+		"allowed": allowed,
+		"ip_address": input.request.http.headers["x-forwarded-for"],
+		"user_agent": input.request.http.headers["user-agent"],
+	}
+}
+
+# Audit log for unauthenticated requests
+audit_log(user_claims, allowed) := log if {
+	user_claims == null
+	log := {
+		"timestamp": time.now_ns(),
+		"user": "unauthenticated",
+		"role": "none",
 		"method": input.request.http.method,
 		"path": input.request.http.path,
 		"allowed": allowed,

@@ -21,7 +21,17 @@ allow_wire_transfer if {
 	"treasury:wire" in user_claims.permissions
 
 	amount := input.request.body.amount
-	client_tier := data.clients[user_claims.client_id].tier
+	amount > 0 # Validate positive amount
+
+	# Validate client exists and has tier
+	user_claims.client_id != null
+	client := data.clients[user_claims.client_id]
+	client != null
+	client.tier != null
+
+	# Validate tier exists in limits
+	client_tier := client.tier
+	client_tier in wire_limits
 	amount <= wire_limits[client_tier]
 }
 
