@@ -2,263 +2,479 @@ package main
 
 import rego.v1
 
-# Default deny
+# EA Financial - Main OPA Policy Entry Point
+# This policy aggregates authorization decisions from all organizational units
+
+import data.commercial.dashboard.access_control as commercial_dashboard
+import data.commercial.wholesale_api.authentication as commercial_auth
+import data.commercial.wholesale_api.compliance as commercial_compliance
+import data.commercial.wholesale_api.corporate_lending as commercial_lending
+import data.commercial.wholesale_api.treasury as commercial_treasury
+import data.ea_financial.identity_provider.mfa as mfa
+import data.ea_financial.identity_provider.sso as sso
+import data.ea_financial.identity_provider.user_management as user_mgmt
+import data.retail.dashboard.access_control as retail_dashboard
+import data.retail.retail_api.accounts as retail_accounts
+import data.retail.retail_api.authentication as retail_auth
+import data.retail.retail_api.compliance as retail_compliance
+import data.retail.retail_api.transactions as retail_transactions
+import data.shared.common
+import data.wealth_mgmt.dashboard.access_control as wealth_dashboard
+import data.wealth_mgmt.investing_api.authentication as wealth_auth
+import data.wealth_mgmt.investing_api.compliance as wealth_compliance
+import data.wealth_mgmt.investing_api.portfolio_management as wealth_portfolio
+import data.wealth_mgmt.investing_api.trading as wealth_trading
+import data.wealth_mgmt.portfolio_mgmt_app.access_control as wealth_app
+
+# Default deny all requests
 default allow := false
 
-# Allow health checks
+# Allow if common policies allow (health checks, OPTIONS)
 allow if {
-	input.request.http.method == "GET"
-	input.request.http.path == "/health"
+	common.allow
 }
 
-# Allow status checks
+# ========================================
+# RETAIL BANKING POLICIES
+# ========================================
+
+# Retail API Authentication
 allow if {
-	input.request.http.method == "GET"
-	input.request.http.path == "/status"
+	retail_auth.allow_login
 }
 
-# Allow root endpoint access
 allow if {
-	input.request.http.method == "GET"
-	input.request.http.path == "/"
+	retail_auth.allow_logout
 }
 
-# Allow OPTIONS requests (CORS preflight)
 allow if {
-	input.request.http.method == "OPTIONS"
+	retail_auth.allow_verify
 }
 
-# Allow login attempts (no authentication required for login endpoint)
+# Retail API Accounts
 allow if {
-	input.request.http.method == "POST"
-	input.request.http.path == "/auth/login"
+	retail_accounts.allow_read_account
 }
 
-# Helper function to get authenticated user claims
-authenticated_claims := user_claims if {
-	token := extract_token
-	valid_token(token)
-	user_claims := claims(token)
-	user_active(user_claims)
-}
-
-# Main authorization logic
 allow if {
-	user_claims := authenticated_claims
-	has_permission(user_claims, input.request)
+	retail_accounts.allow_read_balance
 }
 
-# Role-based access control - managers have full access
 allow if {
-	user_claims := authenticated_claims
-	user_claims.role == "manager"
+	retail_accounts.allow_list_accounts
 }
 
-# Senior representatives have elevated access (except admin operations)
 allow if {
-	user_claims := authenticated_claims
-	user_claims.role == "senior_representative"
-	not is_admin_operation(input.request)
+	retail_accounts.allow_open_account
 }
 
-# Extract bearer token from authorization header
-extract_token := token if {
-	auth_header := input.request.http.headers.authorization
-	startswith(auth_header, "Bearer ")
-	token := substring(auth_header, 7, -1)
+allow if {
+	retail_accounts.allow_close_account
 }
 
-# Validate JWT token (simplified - in production use proper JWT validation)
-valid_token(token) if {
-	# For mock tokens, just check they're not empty
-	# In production, properly validate JWT format and signature
-	token != ""
-	token != null
+allow if {
+	retail_accounts.allow_update_account_status
 }
 
-# Extract claims from JWT token (mock implementation)
-claims(token) := user_claims if {
-	# In production, properly decode and verify JWT
-	# This is a mock implementation for demo purposes
-	users := data.users
-
-	# For demo, extract username from a simple token format
-	# In production, decode the JWT properly
-	parts := split(token, ".")
-
-	# Mock: use token as username lookup for demo
-	some username, user in users
-	user.token == token
-
-	user_claims := {
-		"sub": username,
-		"role": user.role,
-		"permissions": user.permissions,
-		"department": user.department,
-		"active": user.active,
-		"exp": user.exp,
-	}
+# Retail API Transactions
+allow if {
+	retail_transactions.allow_read_transactions
 }
 
-# Check if user is active
-user_active(user_claims) if {
-	user_claims.active == true
+allow if {
+	retail_transactions.allow_debit
 }
 
-# Permission checking logic
-has_permission(user_claims, request) if {
-	method := request.http.method
-	path := request.http.path
-
-	# Extract resource and action
-	resource := extract_resource(path)
-	action := method_to_action(method)
-
-	# Check if user has required permission
-	required_permission := sprintf("%s:%s", [resource, action])
-	required_permission in user_claims.permissions
+allow if {
+	retail_transactions.allow_credit
 }
 
-# Extract resource from path
-extract_resource(path) := resource if {
-	path_parts := split(trim(path, "/"), "/")
-
-	# Route-based resource mapping
-	resource := route_to_resource(path_parts)
+allow if {
+	retail_transactions.allow_internal_transfer
 }
 
-# Map routes to resources
-route_to_resource(parts) := "auth" if {
-	parts[0] == "auth"
+allow if {
+	retail_transactions.allow_manual_adjustment
 }
 
-route_to_resource(parts) := "accounts" if {
-	parts[0] == "accounts"
+allow if {
+	retail_transactions.allow_large_adjustment
 }
 
-route_to_resource(parts) := "terms" if {
-	parts[0] == "terms"
+allow if {
+	retail_transactions.allow_transaction_reversal
 }
 
-route_to_resource(parts) := "transactions" if {
-	parts[0] == "accounts"
-	count(parts) >= 3
-	parts[2] == "transactions"
+# Retail Compliance
+allow if {
+	retail_compliance.allow_read_terms
 }
 
-route_to_resource(parts) := "balance" if {
-	parts[0] == "accounts"
-	count(parts) >= 3
-	parts[2] == "balance"
+allow if {
+	retail_compliance.allow_fraud_review
 }
 
-route_to_resource(parts) := "debit" if {
-	parts[0] == "accounts"
-	count(parts) >= 3
-	parts[2] == "debit"
+allow if {
+	retail_compliance.allow_fraud_update
 }
 
-route_to_resource(parts) := "credit" if {
-	parts[0] == "accounts"
-	count(parts) >= 3
-	parts[2] == "credit"
+# Retail Dashboard
+allow if {
+	retail_dashboard.allow_dashboard_access
 }
 
-# Default to general API resource
-route_to_resource(parts) := "api" if {
-	not parts[0] == "auth"
-	not parts[0] == "accounts"
-	not parts[0] == "terms"
+allow if {
+	retail_dashboard.allow_view_customer
 }
 
-# Map HTTP methods to actions
-method_to_action("GET") := "read"
-
-method_to_action("POST") := "create"
-
-method_to_action("PUT") := "update"
-
-method_to_action("DELETE") := "delete"
-
-method_to_action("PATCH") := "update"
-
-# Check if operation requires admin privileges
-is_admin_operation(request) if {
-	request.http.method == "DELETE"
+allow if {
+	retail_dashboard.allow_edit_customer
 }
 
-is_admin_operation(request) if {
-	contains(request.http.path, "/admin")
+allow if {
+	retail_dashboard.allow_export_data
 }
 
-# Account access control - users can only access accounts they're assigned to
-account_access_allowed(user_claims, account_id) if {
-	# Managers can access any account
-	user_claims.role == "manager"
+allow if {
+	retail_dashboard.allow_admin_panel
 }
 
-account_access_allowed(user_claims, account_id) if {
-	# Users can access accounts in their assigned list
-	account_id in data.user_accounts[user_claims.sub]
+allow if {
+	retail_dashboard.allow_view_reports
 }
 
-# Time-based access control
-time_based_access_allowed if {
-	# Get current time (in production, use time.now_ns())
-	current_hour := 9 # Mock current hour
+# ========================================
+# COMMERCIAL BANKING POLICIES
+# ========================================
 
-	# Banking hours: 6 AM to 10 PM
-	current_hour >= 6
-	current_hour <= 22
+# Commercial API Authentication
+allow if {
+	commercial_auth.allow_login
 }
 
-# Compliance logging for sensitive operations
-log_decision := {
-	"timestamp": time.now_ns(),
-	"user": user_claims.sub,
-	"role": user_claims.role,
-	"resource": extract_resource(input.request.http.path),
-	"action": method_to_action(input.request.http.method),
-	"allowed": allow,
-	"reason": decision_reason,
+allow if {
+	commercial_auth.allow_token_refresh
+}
+
+# Commercial Corporate Lending
+allow if {
+	commercial_lending.allow_view_credit_lines
+}
+
+allow if {
+	commercial_lending.allow_request_credit_line
+}
+
+allow if {
+	commercial_lending.allow_approve_credit_line
+}
+
+allow if {
+	commercial_lending.allow_loan_disbursement
+}
+
+allow if {
+	commercial_lending.allow_view_loans
+}
+
+# Commercial Treasury
+allow if {
+	commercial_treasury.allow_wire_transfer
+}
+
+allow if {
+	commercial_treasury.allow_fx_trade
+}
+
+allow if {
+	commercial_treasury.allow_fx_trade_large
+}
+
+allow if {
+	commercial_treasury.allow_cash_pooling
+}
+
+allow if {
+	commercial_treasury.allow_liquidity_reports
+}
+
+allow if {
+	commercial_treasury.allow_securities_lending
+}
+
+allow if {
+	commercial_treasury.allow_derivatives
+}
+
+# Commercial Compliance
+allow if {
+	commercial_compliance.allow_compliance_reports
+}
+
+allow if {
+	commercial_compliance.allow_sar_filing
+}
+
+allow if {
+	commercial_compliance.allow_ctr_filing
+}
+
+allow if {
+	commercial_compliance.allow_ofac_override
+}
+
+allow if {
+	commercial_compliance.allow_regulatory_filing
+}
+
+# Commercial Dashboard
+allow if {
+	commercial_dashboard.allow_dashboard_access
+}
+
+allow if {
+	commercial_dashboard.allow_view_client
+}
+
+allow if {
+	commercial_dashboard.allow_approval_workflow
+}
+
+allow if {
+	commercial_dashboard.allow_treasury_dashboard
+}
+
+allow if {
+	commercial_dashboard.allow_compliance_dashboard
+}
+
+# ========================================
+# WEALTH MANAGEMENT POLICIES
+# ========================================
+
+# Wealth Management Authentication
+allow if {
+	wealth_auth.allow_login
+}
+
+# Wealth Portfolio Management
+allow if {
+	wealth_portfolio.allow_view_portfolio
+}
+
+allow if {
+	wealth_portfolio.allow_rebalance
+}
+
+allow if {
+	wealth_portfolio.allow_allocation_change
+}
+
+allow if {
+	wealth_portfolio.allow_performance_analytics
+}
+
+allow if {
+	wealth_portfolio.allow_risk_assessment
+}
+
+# Wealth Trading
+allow if {
+	wealth_trading.allow_equity_trade
+}
+
+allow if {
+	wealth_trading.allow_fixed_income_trade
+}
+
+allow if {
+	wealth_trading.allow_options_trade
+}
+
+allow if {
+	wealth_trading.allow_mutual_fund
+}
+
+allow if {
+	wealth_trading.allow_alternative_investment
+}
+
+allow if {
+	wealth_trading.allow_order_management
+}
+
+allow if {
+	wealth_trading.allow_market_data
+}
+
+# Wealth Compliance
+allow if {
+	wealth_compliance.allow_finra_report
+}
+
+allow if {
+	wealth_compliance.allow_form_adv
+}
+
+allow if {
+	wealth_compliance.allow_trade_surveillance
+}
+
+allow if {
+	wealth_compliance.allow_market_abuse_review
+}
+
+# Wealth App Access
+allow if {
+	wealth_app.allow_app_access
+}
+
+allow if {
+	wealth_app.allow_client_portal
+}
+
+allow if {
+	wealth_app.allow_advisor_workspace
+}
+
+allow if {
+	wealth_app.allow_analytics_tools
+}
+
+allow if {
+	wealth_app.allow_document_access
+}
+
+allow if {
+	wealth_app.allow_performance_reports
+}
+
+allow if {
+	wealth_app.allow_messaging
+}
+
+allow if {
+	wealth_app.allow_scheduling
+}
+
+# Wealth Dashboard
+allow if {
+	wealth_dashboard.allow_dashboard_access
+}
+
+allow if {
+	wealth_dashboard.allow_feature
+}
+
+allow if {
+	wealth_dashboard.allow_firm_overview
+}
+
+allow if {
+	wealth_dashboard.allow_team_management
+}
+
+allow if {
+	wealth_dashboard.allow_client_book
+}
+
+allow if {
+	wealth_dashboard.allow_compliance_view
+}
+
+# ========================================
+# EA FINANCIAL IDENTITY PROVIDER
+# ========================================
+
+# SSO
+allow if {
+	sso.allow_sso_login
+}
+
+allow if {
+	sso.allow_sso_callback
+}
+
+allow if {
+	sso.allow_saml_assertion
+}
+
+allow if {
+	sso.allow_oauth_token
+}
+
+allow if {
+	sso.allow_session_refresh
+}
+
+allow if {
+	sso.allow_sso_logout
+}
+
+allow if {
+	sso.allow_cross_org_auth
+}
+
+# User Management
+allow if {
+	user_mgmt.allow_view_users
+}
+
+allow if {
+	user_mgmt.allow_create_user
+}
+
+allow if {
+	user_mgmt.allow_update_user
+}
+
+allow if {
+	user_mgmt.allow_deactivate_user
+}
+
+allow if {
+	user_mgmt.allow_self_update
+}
+
+allow if {
+	user_mgmt.allow_role_assignment
+}
+
+allow if {
+	user_mgmt.allow_group_management
+}
+
+# MFA
+allow if {
+	mfa.allow_mfa_enrollment
+}
+
+allow if {
+	mfa.allow_mfa_verify
+}
+
+allow if {
+	mfa.allow_mfa_management
+}
+
+allow if {
+	mfa.allow_backup_codes
+}
+
+allow if {
+	mfa.allow_mfa_reset
+}
+
+# ========================================
+# AUDIT LOGGING
+# ========================================
+
+# Aggregate audit logs from all systems
+logs := {
+	"retail": retail_compliance.log_decision,
+	"commercial": commercial_compliance.log_commercial_transaction,
+	"wealth": wealth_compliance.log_wealth_transaction,
+	"common": common.audit_log(user_claims, allow),
 } if {
-	user_claims := authenticated_claims
-}
-
-# Decision reasoning for audit trails
-decision_reason := "allowed_manager" if {
-	user_claims := authenticated_claims
-	user_claims.role == "manager"
-	allow
-}
-
-decision_reason := "allowed_permission" if {
-	user_claims := authenticated_claims
-	has_permission(user_claims, input.request)
-	allow
-}
-
-decision_reason := "denied_inactive_user" if {
-	token := extract_token
-	valid_token(token)
-	user_claims := claims(token)
-	not user_active(user_claims)
-	not allow
-}
-
-decision_reason := "denied_insufficient_permissions" if {
-	user_claims := authenticated_claims
-	not has_permission(user_claims, input.request)
-	not allow
-}
-
-decision_reason := "denied_no_token" if {
-	not extract_token
-	not allow
-}
-
-decision_reason := "denied_invalid_token" if {
-	extract_token
-	not valid_token(extract_token)
-	not allow
+	user_claims := retail_auth.authenticated_claims
 }
