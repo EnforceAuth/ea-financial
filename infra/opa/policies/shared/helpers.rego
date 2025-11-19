@@ -70,19 +70,3 @@ array_contains(arr, value) if {
 	some item in arr
 	item == value
 }
-
-# Get nested object value safely
-get_nested(obj, path) := value if {
-	path_parts := split(path, ".")
-	value := walk_path(obj, path_parts)
-}
-
-walk_path(obj, []) := obj
-
-walk_path(obj, [head | tail]) := walk_path(obj[head], tail) if {
-	obj[head]
-}
-
-walk_path(obj, [head | tail]) := null if {
-	not obj[head]
-}
