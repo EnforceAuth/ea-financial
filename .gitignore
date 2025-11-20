@@ -35,3 +35,11 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # output
 monitoring-report*.txt
+
+# E2E test results
+e2e-report/
+e2e-results.json
+e2e-junit.xml
+test-results/
+playwright-report/
+playwright/.cache/

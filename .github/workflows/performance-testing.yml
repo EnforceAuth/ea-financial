@@ -750,24 +750,24 @@ jobs:
 
       - name: Send Slack notification
         if: always()
-        uses: 8398a7/action-slack@v3
-        with:
-          status: ${{ job.status }}
-          channel: "#performance-alerts"
-          text: |
-            ⚡ Performance Testing Completed
-
-            **Results Summary:**
-            • Load Test: ${{ needs.load-testing.result || 'skipped' }}
-            • Stress Test: ${{ needs.stress-testing.result || 'skipped' }}
-            • Spike Test: ${{ needs.spike-testing.result || 'skipped' }}
-            • Benchmark: ${{ needs.benchmark-testing.result || 'skipped' }}
-
-            **Environment:** ${{ github.event.inputs.target_environment || 'staging' }}
-
-            📊 View detailed reports in GitHub Actions artifacts
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          echo "============================================"
+          echo "This step would send notifications to Slack"
+          echo "============================================"
+          echo "Channel: #performance-alerts"
+          echo "Status: ${{ job.status }}"
+          echo "⚡ Performance Testing Completed"
+          echo ""
+          echo "Results Summary:"
+          echo "• Load Test: ${{ needs.load-testing.result || 'skipped' }}"
+          echo "• Stress Test: ${{ needs.stress-testing.result || 'skipped' }}"
+          echo "• Spike Test: ${{ needs.spike-testing.result || 'skipped' }}"
+          echo "• Benchmark: ${{ needs.benchmark-testing.result || 'skipped' }}"
+          echo ""
+          echo "Environment: ${{ github.event.inputs.target_environment || 'staging' }}"
+          echo ""
+          echo "📊 View detailed reports in GitHub Actions artifacts"
+          echo "============================================"
 
       - name: Update performance dashboard
         if: always()
