@@ -2,6 +2,8 @@ name: End-to-End Testing
 
 on:
   schedule:
+    # NOTE: Scheduled E2E tests are currently disabled because start-local-services job is disabled
+    # Re-enable when E2E tests are ready by setting start-local-services if: true
     # Run E2E tests daily at 4 AM UTC
     - cron: "0 4 * * *"
   pull_request:
@@ -167,8 +169,8 @@ jobs:
     needs: [setup-e2e-environment, start-local-services]
     if: |
       always() &&
-      (needs.start-local-services.result == 'success' || needs.start-local-services.result == 'skipped') &&
-      (github.event.inputs.test_suite == 'smoke' || github.event.inputs.test_suite == 'all' || github.event_name == 'schedule')
+      needs.start-local-services.result == 'success' &&
+      (github.event.inputs.test_suite == 'smoke' || github.event.inputs.test_suite == 'all')
     strategy:
       matrix:
         browser: [chromium]
@@ -311,8 +313,8 @@ jobs:
     needs: [setup-e2e-environment, start-local-services]
     if: |
       always() &&
-      (needs.start-local-services.result == 'success' || needs.start-local-services.result == 'skipped') &&
-      (github.event.inputs.test_suite == 'critical-path' || github.event.inputs.test_suite == 'all' || github.event_name == 'schedule')
+      needs.start-local-services.result == 'success' &&
+      (github.event.inputs.test_suite == 'critical-path' || github.event.inputs.test_suite == 'all')
     strategy:
       matrix:
         browser: [chromium, firefox]
@@ -538,7 +540,7 @@ jobs:
     needs: [setup-e2e-environment, start-local-services]
     if: |
       always() &&
-      (needs.start-local-services.result == 'success' || needs.start-local-services.result == 'skipped') &&
+      needs.start-local-services.result == 'success' &&
       (github.event.inputs.test_suite == 'accessibility' || github.event.inputs.test_suite == 'all')
     steps:
       - name: Checkout code
@@ -681,7 +683,7 @@ jobs:
     needs: [setup-e2e-environment, start-local-services]
     if: |
       always() &&
-      (needs.start-local-services.result == 'success' || needs.start-local-services.result == 'skipped') &&
+      needs.start-local-services.result == 'success' &&
       (github.event.inputs.test_suite == 'regression' || github.event.inputs.test_suite == 'all')
     strategy:
       matrix:
