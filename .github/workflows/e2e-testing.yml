@@ -2,6 +2,8 @@ name: End-to-End Testing
 
 on:
   schedule:
+    # NOTE: Scheduled E2E tests are currently disabled because start-local-services job is disabled
+    # Re-enable when E2E tests are ready by setting start-local-services if: true
     # Run E2E tests daily at 4 AM UTC
     - cron: "0 4 * * *"
   pull_request:
@@ -167,8 +169,8 @@ jobs:
     needs: [setup-e2e-environment, start-local-services]
     if: |
       always() &&
-      (needs.start-local-services.result == 'success' || needs.start-local-services.result == 'skipped') &&
-      (github.event.inputs.test_suite == 'smoke' || github.event.inputs.test_suite == 'all' || github.event_name == 'schedule')
+      needs.start-local-services.result == 'success' &&
+      (github.event.inputs.test_suite == 'smoke' || github.event.inputs.test_suite == 'all')
     strategy:
       matrix:
         browser: [chromium]
@@ -311,8 +313,8 @@ jobs:
     needs: [setup-e2e-environment, start-local-services]
     if: |
       always() &&
-      (needs.start-local-services.result == 'success' || needs.start-local-services.result == 'skipped') &&
-      (github.event.inputs.test_suite == 'critical-path' || github.event.inputs.test_suite == 'all' || github.event_name == 'schedule')
+      needs.start-local-services.result == 'success' &&
+      (github.event.inputs.test_suite == 'critical-path' || github.event.inputs.test_suite == 'all')
     strategy:
       matrix:
         browser: [chromium, firefox]
@@ -538,7 +540,7 @@ jobs:
     needs: [setup-e2e-environment, start-local-services]
     if: |
       always() &&
-      (needs.start-local-services.result == 'success' || needs.start-local-services.result == 'skipped') &&
+      needs.start-local-services.result == 'success' &&
       (github.event.inputs.test_suite == 'accessibility' || github.event.inputs.test_suite == 'all')
     steps:
       - name: Checkout code
@@ -681,7 +683,7 @@ jobs:
     needs: [setup-e2e-environment, start-local-services]
     if: |
       always() &&
-      (needs.start-local-services.result == 'success' || needs.start-local-services.result == 'skipped') &&
+      needs.start-local-services.result == 'success' &&
       (github.event.inputs.test_suite == 'regression' || github.event.inputs.test_suite == 'all')
     strategy:
       matrix:
@@ -1089,22 +1091,22 @@ jobs:
 
       - name: Send Slack notification
         if: always()
-        uses: 8398a7/action-slack@v3
-        with:
-          status: ${{ job.status }}
-          channel: "#qa-alerts"
-          text: |
-            🧪 E2E Testing Summary
-
-            **Environment:** ${{ github.event.inputs.environment || 'automated' }}
-            **Browser Coverage:** ${{ github.event.inputs.browser || 'multi-browser' }}
-
-            **Results:**
-            • Smoke Tests: ${{ needs.smoke-tests.result || 'skipped' }}
-            • Critical Paths: ${{ needs.critical-path-tests.result || 'skipped' }}
-            • Accessibility: ${{ needs.accessibility-tests.result || 'skipped' }}
-            • Regression: ${{ needs.regression-tests.result || 'skipped' }}
-
-            🔍 View detailed results: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          echo "============================================"
+          echo "This step would send notifications to Slack"
+          echo "============================================"
+          echo "Channel: #qa-alerts"
+          echo "Status: ${{ job.status }}"
+          echo "🧪 E2E Testing Summary"
+          echo ""
+          echo "Environment: ${{ github.event.inputs.environment || 'automated' }}"
+          echo "Browser Coverage: ${{ github.event.inputs.browser || 'multi-browser' }}"
+          echo ""
+          echo "Results:"
+          echo "• Smoke Tests: ${{ needs.smoke-tests.result || 'skipped' }}"
+          echo "• Critical Paths: ${{ needs.critical-path-tests.result || 'skipped' }}"
+          echo "• Accessibility: ${{ needs.accessibility-tests.result || 'skipped' }}"
+          echo "• Regression: ${{ needs.regression-tests.result || 'skipped' }}"
+          echo ""
+          echo "🔍 View detailed results: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "============================================"
