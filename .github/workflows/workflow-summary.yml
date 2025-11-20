@@ -388,34 +388,17 @@ jobs:
           echo "report_type=$REPORT_TYPE" >> $GITHUB_OUTPUT
 
       - name: Send Slack summary
-        uses: 8398a7/action-slack@v3
-        with:
-          status: custom
-          channel: "#devops-reports"
-          custom_payload: |
-            {
-              attachments: [{
-                color: '${{ steps.status.outputs.color }}',
-                title: '📊 EA Financial CI/CD ${{ steps.status.outputs.report_type }} Summary',
-                fields: [{
-                  title: 'Success Rate',
-                  value: '${{ needs.collect-workflow-data.outputs.success_rate }}%',
-                  short: true
-                }, {
-                  title: 'Total Runs',
-                  value: '${{ needs.collect-workflow-data.outputs.total_runs }}',
-                  short: true
-                }, {
-                  title: 'Status',
-                  value: '${{ steps.status.outputs.message }}',
-                  short: false
-                }],
-                footer: 'EA Financial DevOps',
-                ts: Math.floor(Date.now() / 1000)
-              }]
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          echo "============================================"
+          echo "This step would send notifications to Slack"
+          echo "============================================"
+          echo "Channel: #devops-reports"
+          echo "Title: 📊 EA Financial CI/CD ${{ steps.status.outputs.report_type }} Summary"
+          echo "Success Rate: ${{ needs.collect-workflow-data.outputs.success_rate }}%"
+          echo "Total Runs: ${{ needs.collect-workflow-data.outputs.total_runs }}"
+          echo "Status: ${{ steps.status.outputs.message }}"
+          echo "Color: ${{ steps.status.outputs.color }}"
+          echo "============================================"
 
       - name: Create issue for low success rate
         if: ${{ needs.collect-workflow-data.outputs.success_rate < 80 }}

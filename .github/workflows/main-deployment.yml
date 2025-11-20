@@ -307,19 +307,19 @@ jobs:
           echo "Production: ${{ needs.deploy-production.result }}"
 
       - name: Send Slack notification
-        uses: 8398a7/action-slack@v3
         if: always()
-        with:
-          status: ${{ job.status }}
-          channel: "#deployments"
-          text: |
-            🚀 Deployment Update
-            Version: ${{ needs.pre-deployment-checks.outputs.version }}
-            Staging: ${{ needs.deploy-staging.result }}
-            Production: ${{ needs.deploy-production.result }}
-            Commit: ${{ github.event.head_commit.message }}
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          echo "============================================"
+          echo "This step would send notifications to Slack"
+          echo "============================================"
+          echo "Channel: #deployments"
+          echo "Status: ${{ job.status }}"
+          echo "🚀 Deployment Update"
+          echo "Version: ${{ needs.pre-deployment-checks.outputs.version }}"
+          echo "Staging: ${{ needs.deploy-staging.result }}"
+          echo "Production: ${{ needs.deploy-production.result }}"
+          echo "Commit: ${{ github.event.head_commit.message }}"
+          echo "============================================"
 
       - name: Create GitHub Release
         if: needs.deploy-production.result == 'success'

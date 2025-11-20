@@ -1091,22 +1091,22 @@ jobs:
 
       - name: Send Slack notification
         if: always()
-        uses: 8398a7/action-slack@v3
-        with:
-          status: ${{ job.status }}
-          channel: "#qa-alerts"
-          text: |
-            🧪 E2E Testing Summary
-
-            **Environment:** ${{ github.event.inputs.environment || 'automated' }}
-            **Browser Coverage:** ${{ github.event.inputs.browser || 'multi-browser' }}
-
-            **Results:**
-            • Smoke Tests: ${{ needs.smoke-tests.result || 'skipped' }}
-            • Critical Paths: ${{ needs.critical-path-tests.result || 'skipped' }}
-            • Accessibility: ${{ needs.accessibility-tests.result || 'skipped' }}
-            • Regression: ${{ needs.regression-tests.result || 'skipped' }}
-
-            🔍 View detailed results: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          echo "============================================"
+          echo "This step would send notifications to Slack"
+          echo "============================================"
+          echo "Channel: #qa-alerts"
+          echo "Status: ${{ job.status }}"
+          echo "🧪 E2E Testing Summary"
+          echo ""
+          echo "Environment: ${{ github.event.inputs.environment || 'automated' }}"
+          echo "Browser Coverage: ${{ github.event.inputs.browser || 'multi-browser' }}"
+          echo ""
+          echo "Results:"
+          echo "• Smoke Tests: ${{ needs.smoke-tests.result || 'skipped' }}"
+          echo "• Critical Paths: ${{ needs.critical-path-tests.result || 'skipped' }}"
+          echo "• Accessibility: ${{ needs.accessibility-tests.result || 'skipped' }}"
+          echo "• Regression: ${{ needs.regression-tests.result || 'skipped' }}"
+          echo ""
+          echo "🔍 View detailed results: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "============================================"
