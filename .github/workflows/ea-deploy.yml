@@ -1,0 +1,30 @@
+name: Deploy Policy Bundle
+
+on:
+  workflow_dispatch:
+  #push:
+  #  branches: [develop]
+  #  paths:
+  #    - 'policies/**'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to EnforceAuth
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy Policy Bundle
+        uses: EnforceAuth/mono/packages/ci/github-action@main
+        with:
+          ci-entity-id: ${{ secrets.EA_CI_ENTITY_ID }}
+          target-entity-id: ${{ secrets.EA_TARGET_ENTITY_ID }}
+          api-url: ${{ vars.EA_API_URL }}
+          wait-for-completion: true
+          timeout-minutes: 10
