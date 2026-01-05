@@ -22,6 +22,6 @@ jobs:
         with:
           ci-entity-id: ${{ secrets.EA_CI_ENTITY_ID }}
           target-entity-id: ${{ secrets.EA_TARGET_ENTITY_ID }}
-          api-url: ${{ secrets.EA_API_URL }}
+          api-url: ${{ vars.EA_API_URL }}
           wait-for-completion: true
           timeout-minutes: 10
