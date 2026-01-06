@@ -23,8 +23,7 @@ jobs:
       - name: Deploy Policy Bundle
         uses: EnforceAuth/deploy-action@main
         with:
-          ci-entity-id: ${{ secrets.EA_CI_ENTITY_ID }}
-          target-entity-id: ${{ secrets.EA_TARGET_ENTITY_ID }}
-          api-url: ${{ vars.EA_API_URL }}
+          entity-id: '9191f3aa-6cba-4c1c-8bfb-2c6055cfa36a'
+          api-url: 'https://rsh4xw59xa.execute-api.us-east-1.amazonaws.com/dev'
           wait-for-completion: true
           timeout-minutes: 10
