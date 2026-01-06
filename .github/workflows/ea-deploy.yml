@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   deploy:
-    name: Deploy to EnforceAuth
+    name: Deploy via EnforceAuth
     runs-on: ubuntu-latest
     environment: dev
     steps:
@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Deploy Policy Bundle
-        uses: EnforceAuth/deploy-action@main
+        uses: EnforceAuth/deploy-action@v1
         with:
           entity-id: ${{ secrets.EA_ENTITY_ID }}
           api-url: ${{ vars.EA_API_URL }}
