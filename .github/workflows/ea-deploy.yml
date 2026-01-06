@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Deploy Policy Bundle
-        uses: EnforceAuth/mono/packages/ci/github-action@main
+        uses: EnforceAuth/deploy-action@main
         with:
           ci-entity-id: ${{ secrets.EA_CI_ENTITY_ID }}
           target-entity-id: ${{ secrets.EA_TARGET_ENTITY_ID }}
