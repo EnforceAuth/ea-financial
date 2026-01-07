@@ -78,7 +78,40 @@ Banking application services and APIs:
 - `consumer-accounts-internal-api/` - Account management service
 - Additional services as they are developed
 
+## CI/CD Pipeline
+
+### Policy Deployment
+
+The CI workflow (`.github/workflows/ea-deploy.yml`) deploys the **Retail API** system policies to EnforceAuth:
+
+- **Entity ID**: Configured in `EA_ENTITY_ID` secret
+- **Policies Location**: `infra/opa/policies/`
+- **Trigger**: Manual dispatch via `workflow_dispatch`
+
+The workflow uses the EnforceAuth GitHub Action to deploy policy bundles with wait-for-completion and a 10-minute timeout.
+
 ## Quick Start
+
+### Running Rego Tests
+
+Run policy tests locally using `opa test` or `eopa test`:
+
+```bash
+# Run all policy tests
+opa test infra/opa/policies/ -v
+
+# Run only retail_api tests
+opa test infra/opa/policies/retail/retail_api/ -v
+
+# With eopa (Enterprise OPA)
+eopa test infra/opa/policies/ -v
+```
+
+Test files are located alongside policy files with `_test.rego` suffix:
+- `infra/opa/policies/retail/retail_api/authentication_test.rego`
+- `infra/opa/policies/retail/retail_api/accounts_test.rego`
+- `infra/opa/policies/retail/retail_api/compliance_test.rego`
+- `infra/opa/policies/retail/retail_api/transactions_test.rego`
 
 ### Testing Authorization Policies
 
