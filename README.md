@@ -84,7 +84,7 @@ Banking application services and APIs:
 
 The CI workflow (`.github/workflows/ea-deploy.yml`) deploys the **Retail API** system policies to EnforceAuth:
 
-- **Entity ID**: `52bdc2ad-444f-4577-8459-62a69704eed5` (configured in `EA_ENTITY_ID` secret)
+- **Entity ID**: Configured in `EA_ENTITY_ID` secret
 - **Policies Location**: `infra/opa/policies/`
 - **Trigger**: Manual dispatch via `workflow_dispatch`
 

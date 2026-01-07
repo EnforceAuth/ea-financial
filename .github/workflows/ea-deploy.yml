@@ -1,5 +1,5 @@
 # Deploys the Retail API system policies to EnforceAuth
-# Entity ID: 52bdc2ad-**** (configured in EA_ENTITY_ID secret)
+# Entity ID configured in EA_ENTITY_ID secret
 name: Deploy Policy Bundle
 
 on:
