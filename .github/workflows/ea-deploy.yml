@@ -1,3 +1,5 @@
+# Deploys the Retail API system policies to EnforceAuth
+# Entity ID: 52bdc2ad-**** (configured in EA_ENTITY_ID secret)
 name: Deploy Policy Bundle
 
 on:
@@ -5,7 +7,8 @@ on:
   #push:
   #  branches: [develop]
   #  paths:
-  #    - 'policies/**'
+  #    - 'infra/opa/policies/**'
+  #    - 'projects/retail-api/**'
 
 permissions:
   id-token: write

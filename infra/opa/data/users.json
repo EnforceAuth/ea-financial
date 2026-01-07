@@ -62,12 +62,87 @@
     },
     "slee": {
       "role": "analyst",
-      "permissions": ["accounts:read", "balance:read", "transactions:read", "terms:read"],
+      "permissions": [
+        "accounts:read",
+        "balance:read",
+        "transactions:read",
+        "terms:read"
+      ],
       "department": "analytics",
       "active": false,
       "token": "slee_token_000",
       "exp": 1793456391,
       "assigned_accounts": []
+    },
+    "alice.consumer": {
+      "role": "retail_customer",
+      "permissions": [
+        "accounts:read",
+        "balance:read",
+        "transactions:read",
+        "transactions:create",
+        "credit:create",
+        "debit:create",
+        "terms:read"
+      ],
+      "department": "retail_banking",
+      "active": true,
+      "token": "alice_consumer_token",
+      "exp": 1793456391,
+      "customer_tier": "standard",
+      "owned_accounts": ["ACC-R001", "ACC-R002"]
+    },
+    "bob.premium": {
+      "role": "retail_customer_premium",
+      "permissions": [
+        "accounts:read",
+        "balance:read",
+        "transactions:read",
+        "transactions:create",
+        "credit:create",
+        "debit:create",
+        "terms:read"
+      ],
+      "department": "retail_banking",
+      "active": true,
+      "token": "bob_premium_token",
+      "exp": 1793456391,
+      "customer_tier": "premium",
+      "owned_accounts": ["ACC-R003", "ACC-R004", "ACC-R005"]
+    },
+    "carol.joint": {
+      "role": "retail_customer",
+      "permissions": [
+        "accounts:read",
+        "balance:read",
+        "transactions:read",
+        "transactions:create",
+        "credit:create",
+        "debit:create",
+        "terms:read"
+      ],
+      "department": "retail_banking",
+      "active": true,
+      "token": "carol_joint_token",
+      "exp": 1793456391,
+      "customer_tier": "standard",
+      "owned_accounts": ["ACC-R006"],
+      "joint_accounts": ["ACC-R001"]
+    },
+    "dan.inactive": {
+      "role": "retail_customer",
+      "permissions": [
+        "accounts:read",
+        "balance:read",
+        "transactions:read",
+        "terms:read"
+      ],
+      "department": "retail_banking",
+      "active": false,
+      "token": "dan_inactive_token",
+      "exp": 1793456391,
+      "customer_tier": "standard",
+      "owned_accounts": ["ACC-R007"]
     }
   },
   "user_accounts": {
@@ -85,24 +160,52 @@
       "ACC010"
     ],
     "rbrown": ["ACC001", "ACC002", "ACC003"],
-    "slee": []
+    "slee": [],
+    "alice.consumer": ["ACC-R001", "ACC-R002"],
+    "bob.premium": ["ACC-R003", "ACC-R004", "ACC-R005"],
+    "carol.joint": ["ACC-R006", "ACC-R001"],
+    "dan.inactive": ["ACC-R007"]
   },
   "roles": {
     "manager": {
       "level": 4,
-      "description": "Full access to all banking operations and administrative functions"
+      "description": "Full access to all banking operations and administrative functions",
+      "type": "internal"
     },
     "senior_representative": {
       "level": 3,
-      "description": "Enhanced customer service representative with transaction privileges"
+      "description": "Enhanced customer service representative with transaction privileges",
+      "type": "internal"
     },
     "representative": {
       "level": 2,
-      "description": "Standard customer service representative with read access"
+      "description": "Standard customer service representative with read access",
+      "type": "internal"
     },
     "analyst": {
       "level": 1,
-      "description": "Analytics role with limited read-only access"
+      "description": "Analytics role with limited read-only access",
+      "type": "internal"
+    },
+    "retail_customer": {
+      "level": 1,
+      "description": "Standard retail banking customer with access to own accounts",
+      "type": "external",
+      "daily_limits": {
+        "atm_withdrawal": 500,
+        "debit_card": 2500,
+        "transfer": 5000
+      }
+    },
+    "retail_customer_premium": {
+      "level": 2,
+      "description": "Premium retail banking customer with higher limits and priority service",
+      "type": "external",
+      "daily_limits": {
+        "atm_withdrawal": 1000,
+        "debit_card": 10000,
+        "transfer": 25000
+      }
     }
   },
   "departments": {
@@ -126,6 +229,14 @@
         "start": 8,
         "end": 18
       }
+    },
+    "retail_banking": {
+      "access_level": "customer",
+      "business_hours": {
+        "start": 0,
+        "end": 24
+      },
+      "description": "External retail banking customers accessing their own accounts"
     }
   }
 }
