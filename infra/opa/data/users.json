@@ -62,12 +62,7 @@
     },
     "slee": {
       "role": "analyst",
-      "permissions": [
-        "accounts:read",
-        "balance:read",
-        "transactions:read",
-        "terms:read"
-      ],
+      "permissions": ["accounts:read", "balance:read", "transactions:read", "terms:read"],
       "department": "analytics",
       "active": false,
       "token": "slee_token_000",
@@ -131,12 +126,7 @@
     },
     "dan.inactive": {
       "role": "retail_customer",
-      "permissions": [
-        "accounts:read",
-        "balance:read",
-        "transactions:read",
-        "terms:read"
-      ],
+      "permissions": ["accounts:read", "balance:read", "transactions:read", "terms:read"],
       "department": "retail_banking",
       "active": false,
       "token": "dan_inactive_token",
