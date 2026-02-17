@@ -1,0 +1,80 @@
+# OPA Configuration for EA Platform Integration
+# Used by: docker-compose.ea.yml overlay, ECS/Fargate deployments
+#
+# Sends status reports and decision logs to the EA Platform API
+# instead of logging to console. Requires env vars:
+#   EA_API_KEY          - API key from EA Platform (scoped to entity)
+#   EA_PLATFORM_URL     - EA Platform API base URL (e.g. https://api.enforceauth.dev/v1)
+#   OPA_INSTANCE_ID     - Unique instance identifier (becomes pdp_instance_id)
+#   BUNDLE_BUCKET_NAME  - S3 bucket for policy bundles
+#   ENVIRONMENT         - Environment label (dev, staging, prod)
+
+services:
+  s3:
+    url: https://s3.us-east-1.amazonaws.com
+    credentials:
+      s3_signing:
+        environment_credentials: {}
+  enforceauth:
+    url: "${EA_PLATFORM_URL}"
+    credentials:
+      bearer:
+        token: "${EA_API_KEY}"
+    response_header_timeout_seconds: 10
+
+labels:
+  id: "${OPA_INSTANCE_ID}"
+  version: "1.0.0"
+  environment: "${ENVIRONMENT}"
+
+plugins:
+  envoy_ext_authz_grpc:
+    addr: :9191
+    query: data.envoy.authz.allow
+
+decision_logs:
+  service: enforceauth
+  resource: /v1/decisions/logs
+  reporting:
+    min_delay_seconds: 5
+    max_delay_seconds: 10
+
+status:
+  service: enforceauth
+  prometheus: true
+
+server:
+  encoding:
+    gzip:
+      min_length: 1024
+
+bundles:
+  ea-financial:
+    resource: "${BUNDLE_BUCKET_NAME}/policies/ea-financial/bundle.tar.gz"
+    service: s3
+    polling:
+      min_delay_seconds: 10
+      max_delay_seconds: 20
+
+# Configure metrics
+metrics:
+  prometheus:
+    http_request_duration_seconds:
+      buckets:
+        - 0.005
+        - 0.01
+        - 0.025
+        - 0.05
+        - 0.1
+        - 0.25
+        - 0.5
+        - 1
+        - 2.5
+        - 5
+        - 10
+
+# Default decision
+default_decision: "/v1/data/ea_financial/authz/allow"
+
+# Default authorization query
+default_authorization_decision: "/v1/data/ea_financial/authz/allow"

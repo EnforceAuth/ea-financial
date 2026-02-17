@@ -1,0 +1,29 @@
+# Docker Compose override for EA Platform integration
+#
+# Usage:
+#   docker compose -f docker-compose.dev.yml -f docker-compose.ea.yml --env-file .env.ea up
+#
+# This overlay reconfigures the EOPA sidecar to send status reports and
+# decision logs to the EA Platform API instead of logging to console.
+# The API and App containers are unchanged.
+#
+# Prerequisites:
+#   1. Apply the ea-financial demo template in the EA Platform UI
+#   2. Provision an API key for the Retail API entity (see ea repo scripts)
+#   3. Copy .env.ea.example to .env.ea and fill in the values
+
+services:
+  opa:
+    environment:
+      - EA_API_KEY=${EA_API_KEY}
+      - EA_PLATFORM_URL=${EA_PLATFORM_URL:-https://api.enforceauth.dev/v1}
+      - OPA_INSTANCE_ID=${OPA_INSTANCE_ID:-retail-api-local-001}
+      - BUNDLE_BUCKET_NAME=${BUNDLE_BUCKET_NAME:-ea-financial-policy-bundles-dev}
+      - ENVIRONMENT=${ENVIRONMENT:-dev}
+    command:
+      - "run"
+      - "--server"
+      - "--addr=0.0.0.0:8181"
+      - "--config-file=/config/opa-config-ea.yaml"
+      - "--log-level=info"
+      - "--log-format=json"
