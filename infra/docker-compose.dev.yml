@@ -46,8 +46,8 @@ services:
   # API Service
   consumer-accounts-api:
     build:
-      context: ../projects/consumer-accounts-internal-api
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: projects/consumer-accounts-internal-api/Dockerfile
     container_name: ea-financial-api
     ports:
       - "3001:3001"
