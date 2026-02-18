@@ -2,19 +2,16 @@
 # Used by: docker-compose.ea.yml overlay, ECS/Fargate deployments
 #
 # Sends status reports and decision logs to the EA Platform API
-# instead of logging to console. Requires env vars:
+# instead of logging to console. Policies are loaded from disk
+# (baked into Docker image), not from S3 bundles.
+#
+# Requires env vars:
 #   EA_API_KEY          - API key from EA Platform (scoped to entity)
 #   EA_PLATFORM_URL     - EA Platform API base URL (e.g. https://api.enforceauth.dev/v1)
 #   OPA_INSTANCE_ID     - Unique instance identifier (becomes pdp_instance_id)
-#   BUNDLE_BUCKET_NAME  - S3 bucket for policy bundles
 #   ENVIRONMENT         - Environment label (dev, staging, prod)
 
 services:
-  s3:
-    url: https://s3.us-east-1.amazonaws.com
-    credentials:
-      s3_signing:
-        environment_credentials: {}
   enforceauth:
     url: "${EA_PLATFORM_URL}"
     credentials:
@@ -47,14 +44,6 @@ server:
   encoding:
     gzip:
       min_length: 1024
-
-bundles:
-  ea-financial:
-    resource: "${BUNDLE_BUCKET_NAME}/policies/ea-financial/bundle.tar.gz"
-    service: s3
-    polling:
-      min_delay_seconds: 10
-      max_delay_seconds: 20
 
 # Configure metrics
 metrics:
