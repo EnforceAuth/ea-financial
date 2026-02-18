@@ -14,9 +14,8 @@
 services:
   enforceauth:
     url: "${EA_PLATFORM_URL}"
-    credentials:
-      bearer:
-        token: "${EA_API_KEY}"
+    headers:
+      X-Api-Key: "${EA_API_KEY}"
     response_header_timeout_seconds: 10
 
 labels:
