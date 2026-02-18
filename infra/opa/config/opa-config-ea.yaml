@@ -8,7 +8,8 @@
 # Requires env vars:
 #   EA_API_KEY          - API key from EA Platform (scoped to entity)
 #   EA_PLATFORM_URL     - EA Platform API base URL (e.g. https://api.enforceauth.dev/v1)
-#   OPA_INSTANCE_ID     - Unique instance identifier (becomes pdp_instance_id)
+#   OPA_INSTANCE_ID     - Stable instance name (EOPA overrides labels.id with a random UUID,
+#                        so labels.instance_name is used as pdp_instance_id instead)
 #   ENVIRONMENT         - Environment label (dev, staging, prod)
 
 services:
@@ -20,6 +21,7 @@ services:
 
 labels:
   id: "${OPA_INSTANCE_ID}"
+  instance_name: "${OPA_INSTANCE_ID}"
   version: "1.0.0"
   environment: "${ENVIRONMENT}"
 

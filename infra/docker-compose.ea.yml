@@ -5,7 +5,7 @@
 #
 # This overlay reconfigures the EOPA sidecar to send status reports and
 # decision logs to the EA Platform API instead of logging to console.
-# Policies are loaded from disk (baked into the image), not S3 bundles.
+# Policies are loaded from disk (mounted volumes), not S3 bundles.
 #
 # Prerequisites:
 #   1. Apply the ea-financial demo template in the EA Platform UI
@@ -24,6 +24,7 @@ services:
       - "--server"
       - "--addr=0.0.0.0:8181"
       - "--config-file=/config/opa-config-ea.yaml"
+      - "--set=labels.id=${OPA_INSTANCE_ID:-retail-api-local-001}"
       - "--log-level=info"
       - "--log-format=json"
       - "/policies"
@@ -31,3 +32,11 @@ services:
     volumes:
       - ../infra/opa/policies:/policies:ro
       - ../infra/opa/data:/data:ro
+    # Override healthcheck: EOPA distroless image has no wget/curl.
+    # Use the OPA binary to eval a trivial query, proving the server is alive.
+    healthcheck:
+      test: ["CMD", "/ko-app/eopa", "eval", "true"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
