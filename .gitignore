@@ -44,3 +44,6 @@ e2e-junit.xml
 test-results/
 playwright-report/
 playwright/.cache/
+
+infra/certs/
+.claude/settings.local.json
