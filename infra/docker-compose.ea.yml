@@ -30,8 +30,8 @@ services:
       - "/policies"
       - "/data"
     volumes:
-      - ../infra/opa/policies:/policies:ro
-      - ../infra/opa/data:/data:ro
+      - ./opa/policies:/policies:ro
+      - ./opa/data:/data:ro
     # Override healthcheck: EOPA distroless image has no wget/curl.
     # Use the OPA binary to eval a trivial query, proving the server is alive.
     healthcheck:

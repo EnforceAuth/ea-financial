@@ -28,7 +28,7 @@ labels:
 plugins:
   envoy_ext_authz_grpc:
     addr: :9191
-    query: data.envoy.authz.allow
+    query: data.main.allow
 
 decision_logs:
   service: enforceauth
@@ -64,7 +64,7 @@ metrics:
         - 10
 
 # Default decision
-default_decision: "/v1/data/ea_financial/authz/allow"
+default_decision: "/v1/data/main/allow"
 
 # Default authorization query
-default_authorization_decision: "/v1/data/ea_financial/authz/allow"
+default_authorization_decision: "/v1/data/main/allow"

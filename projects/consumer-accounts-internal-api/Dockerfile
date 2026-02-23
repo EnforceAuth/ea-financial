@@ -1,5 +1,5 @@
 # Use Bun base image
-FROM oven/bun:1.2-alpine
+FROM oven/bun:1.3-alpine
 
 # Set working directory to monorepo root
 WORKDIR /monorepo
