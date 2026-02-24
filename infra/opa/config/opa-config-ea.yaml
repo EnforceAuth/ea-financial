@@ -39,7 +39,7 @@ plugins:
 
 decision_logs:
   service: enforceauth
-  resource: /v1/decisions/logs
+  resource: decisions/logs
   reporting:
     min_delay_seconds: 5
     max_delay_seconds: 10

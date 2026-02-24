@@ -61,7 +61,7 @@ services:
     restart: unless-stopped
     volumes:
       # Enable hot reload for development
-      - ../projects/consumer-accounts-internal-api/src:/app/src:ro
+      - ../projects/consumer-accounts-internal-api/src:/monorepo/projects/consumer-accounts-internal-api/src:ro
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.api.rule=Host(`api.ea-financial.local`)"
@@ -101,9 +101,8 @@ services:
     restart: unless-stopped
     volumes:
       # Enable hot reload for development
-      - ../projects/consumer-accounts-internal-app/src:/app/src:ro
-      - ../projects/consumer-accounts-internal-app/public:/app/public:ro
-      - /app/node_modules
+      - ../projects/consumer-accounts-internal-app/src:/monorepo/projects/consumer-accounts-internal-app/src:ro
+      - ../projects/consumer-accounts-internal-app/public:/monorepo/projects/consumer-accounts-internal-app/public:ro
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.app.rule=Host(`ea-financial.local`)"
