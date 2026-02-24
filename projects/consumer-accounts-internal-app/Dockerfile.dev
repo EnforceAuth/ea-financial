@@ -1,32 +1,30 @@
 # Development Dockerfile for React App
-FROM node:18-alpine
+FROM oven/bun:1.3.9-alpine
 
-# Set working directory
-WORKDIR /app
+# Set working directory to monorepo root
+WORKDIR /monorepo
 
-# Install development dependencies
-RUN apk add --no-cache \
-    git \
-    curl
+# Install curl for healthcheck
+RUN apk add --no-cache curl
 
-# Copy package files
-COPY package*.json ./
+# Copy root package files
+COPY package.json bun.lock ./
 
-# Install all dependencies (including dev dependencies)
-RUN npm ci
+# Copy workspace package files
+COPY projects/consumer-accounts-internal-app/package.json ./projects/consumer-accounts-internal-app/
+COPY projects/consumer-accounts-internal-api/package.json ./projects/consumer-accounts-internal-api/
 
-# Copy source code
-COPY . .
+# Install dependencies (respects workspace)
+RUN bun install --frozen-lockfile
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S reactjs -u 1001
+# Set working directory to app project
+WORKDIR /monorepo/projects/consumer-accounts-internal-app
 
-# Change ownership of the app directory
-RUN chown -R reactjs:nodejs /app
+# Copy app source code
+COPY projects/consumer-accounts-internal-app ./
 
-# Switch to non-root user
-USER reactjs
+# Use non-root user (provided by oven/bun image)
+USER bun
 
 # Expose port
 EXPOSE 3000
@@ -36,4 +34,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:3000 || exit 1
 
 # Start development server with hot reload
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
+CMD ["bun", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]

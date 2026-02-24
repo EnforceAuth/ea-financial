@@ -1,0 +1,77 @@
+# OPA Configuration for EA Platform Integration
+# Used by: docker-compose.ea.yml overlay, ECS/Fargate deployments
+#
+# Sends status reports and decision logs to the EA Platform API
+# instead of logging to console. Policies are loaded from disk
+# (baked into Docker image), not from S3 bundles.
+#
+# Requires env vars:
+#   EA_API_KEY          - API key from EA Platform (scoped to entity)
+#   EA_PLATFORM_URL     - EA Platform API base URL (e.g. https://api.enforceauth.dev/v1)
+#   OPA_INSTANCE_ID     - Stable instance name (EOPA overrides labels.id with a random UUID,
+#                        so labels.instance_name is used as pdp_instance_id instead)
+#   ENVIRONMENT         - Environment label (dev, staging, prod)
+#
+# SECURITY:
+#   - OPA interpolates env vars at startup; resolved values are NOT logged.
+#   - Keep log-level at 'info' or above — 'debug' may expose sensitive config.
+#   - For local dev, use sandbox-scoped API keys only.
+#   - Production (ECS/Fargate) injects secrets via AWS Secrets Manager,
+#     not env vars, ensuring credentials never appear in task metadata or logs.
+
+services:
+  enforceauth:
+    url: "${EA_PLATFORM_URL}"
+    headers:
+      X-Api-Key: "${EA_API_KEY}"
+    response_header_timeout_seconds: 10
+
+labels:
+  id: "${OPA_INSTANCE_ID}"
+  instance_name: "${OPA_INSTANCE_ID}"
+  version: "1.0.0"
+  environment: "${ENVIRONMENT}"
+
+plugins:
+  envoy_ext_authz_grpc:
+    addr: :9191
+    query: data.main.allow
+
+decision_logs:
+  service: enforceauth
+  resource: decisions/logs
+  reporting:
+    min_delay_seconds: 5
+    max_delay_seconds: 10
+
+status:
+  service: enforceauth
+  prometheus: true
+
+server:
+  encoding:
+    gzip:
+      min_length: 1024
+
+# Configure metrics
+metrics:
+  prometheus:
+    http_request_duration_seconds:
+      buckets:
+        - 0.005
+        - 0.01
+        - 0.025
+        - 0.05
+        - 0.1
+        - 0.25
+        - 0.5
+        - 1
+        - 2.5
+        - 5
+        - 10
+
+# Default decision
+default_decision: "/v1/data/main/allow"
+
+# Default authorization query
+default_authorization_decision: "/v1/data/main/allow"
