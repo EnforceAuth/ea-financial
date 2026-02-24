@@ -32,11 +32,5 @@ services:
     volumes:
       - ./opa/policies:/policies:ro
       - ./opa/data:/data:ro
-    # Override healthcheck: EOPA distroless image has no wget/curl.
-    # Use the OPA binary to eval a trivial query, proving the server is alive.
-    healthcheck:
-      test: ["CMD", "/ko-app/eopa", "eval", "true"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+    # Healthcheck inherited from docker-compose.dev.yml (eval true + start_period).
+    # EOPA distroless image has no curl/wget; see base file for details.

@@ -19,11 +19,15 @@ services:
       - "--config-file=/config/opa-config.yaml"
       - "--log-level=info"
       - "--log-format=json"
+    # NOTE: EOPA uses a distroless image (no curl/wget/shell). The ideal check
+    # would be GET /health?plugins, but there's no HTTP client in the image.
+    # 'eval true' confirms the binary runs; start_period gives the HTTP server
+    # time to bind before dependent services attempt connections.
     healthcheck:
       test: ["CMD", "/ko-app/eopa", "eval", "true"]
-      interval: 30s
+      interval: 10s
       timeout: 10s
-      retries: 3
+      retries: 5
       start_period: 30s
     networks:
       - ea-financial-network
@@ -214,7 +218,7 @@ services:
     image: grafana/grafana:latest
     container_name: ea-financial-grafana
     ports:
-      - "3001:3000"
+      - "3002:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin123
