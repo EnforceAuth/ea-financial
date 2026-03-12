@@ -1,6 +1,7 @@
-package create_policy_test
+# METADATA
+# title: Create Policy Test
 
-# Generated policy
+package create_policy_test
 
 import rego.v1
 
