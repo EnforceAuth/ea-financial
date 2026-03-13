@@ -1,3 +1,5 @@
+# METADATA
+# title: Accounts
 package retail.retail_api.accounts
 
 import rego.v1
