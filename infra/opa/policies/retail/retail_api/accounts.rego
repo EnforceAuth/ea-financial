@@ -1,5 +1,6 @@
 # METADATA
 # title: Accounts
+# field: other
 package retail.retail_api.accounts
 
 import rego.v1
