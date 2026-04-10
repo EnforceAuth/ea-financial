@@ -45,8 +45,13 @@ jobs:
         if: always()
         run: |
           echo "### Dry-Run Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Status:** ${{ steps.dry-run.outputs.status || 'unknown (step failed)' }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Bundle Version:** ${{ steps.dry-run.outputs.bundle-version || 'N/A' }}" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.dry-run.outcome }}" = "success" ]; then
+            echo "- **Status:** ${{ steps.dry-run.outputs.status }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Bundle Version:** ${{ steps.dry-run.outputs.bundle-version }}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- **Status:** unknown (step failed)" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Bundle Version:** N/A" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   deploy:
     name: Deploy via EnforceAuth

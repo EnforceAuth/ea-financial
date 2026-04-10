@@ -51,7 +51,7 @@ jobs:
         uses: ./.github/actions/setup-environment
 
       - name: Run Trivy dependency scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           scan-type: "fs"
           scan-ref: "."
@@ -152,7 +152,7 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.component }}
 
       - name: Run Trivy container scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: security-scan-${{ matrix.component }}:latest
           format: "sarif"

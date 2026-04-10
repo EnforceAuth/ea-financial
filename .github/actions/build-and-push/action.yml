@@ -157,7 +157,7 @@ runs:
     - name: Security scan with Trivy
       id: scan
       if: inputs.scan-image == 'true' && inputs.push == 'true'
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@v0.35.0
       with:
         image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
         format: "sarif"
