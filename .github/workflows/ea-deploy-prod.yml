@@ -42,14 +42,16 @@ jobs:
           dry-run: true
 
       - name: Print dry-run summary
+        if: always()
         run: |
           echo "### Dry-Run Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Status:** ${{ steps.dry-run.outputs.status }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Bundle Version:** ${{ steps.dry-run.outputs.bundle-version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Status:** ${{ steps.dry-run.outputs.status || 'unknown (step failed)' }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Bundle Version:** ${{ steps.dry-run.outputs.bundle-version || 'N/A' }}" >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
     name: Deploy via EnforceAuth
     needs: dry-run
+    if: needs.dry-run.result == 'success'
     runs-on: ubuntu-latest
     environment: production
     steps:
