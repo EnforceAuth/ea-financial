@@ -1,14 +1,14 @@
-# Deploys the Retail API system policies to EnforceAuth
+# Deploys the Retail API system policies to EnforceAuth (dev)
 # Entity ID configured in EA_ENTITY_ID secret
-name: Deploy Policy Bundle
+name: Deploy Policy Bundle (Dev)
 
 on:
   workflow_dispatch:
-  #push:
-  #  branches: [develop]
-  #  paths:
-  #    - 'infra/opa/policies/**'
-  #    - 'projects/retail-api/**'
+  push:
+    branches: [develop]
+    paths:
+      - 'infra/opa/policies/**'
+      - 'projects/retail-api/**'
 
 permissions:
   id-token: write
@@ -28,5 +28,6 @@ jobs:
         with:
           entity-id: ${{ secrets.EA_ENTITY_ID }}
           api-url: ${{ vars.EA_API_URL }}
+          environment: dev
           wait-for-completion: true
           timeout-minutes: 10

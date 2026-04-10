@@ -1,0 +1,73 @@
+# Deploys the Retail API system policies to EnforceAuth (production)
+# Entity ID configured in EA_ENTITY_ID secret
+#
+# Safety controls:
+#   - Dry-run validation before deploy
+#   - GitHub environment protection rules (configure required reviewers
+#     on the "production" environment in repo settings)
+#   - Concurrency lock prevents parallel production deploys
+name: Deploy Policy Bundle (Prod)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/opa/policies/**'
+      - 'projects/retail-api/**'
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  dry-run:
+    name: Validate (Dry Run)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Dry-run deployment
+        id: dry-run
+        uses: EnforceAuth/deploy-action@v1
+        with:
+          entity-id: ${{ secrets.EA_ENTITY_ID }}
+          api-url: ${{ vars.EA_API_URL }}
+          environment: production
+          dry-run: true
+
+      - name: Print dry-run summary
+        if: always()
+        run: |
+          echo "### Dry-Run Summary" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.dry-run.outcome }}" = "success" ]; then
+            echo "- **Status:** ${{ steps.dry-run.outputs.status }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Bundle Version:** ${{ steps.dry-run.outputs.bundle-version }}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- **Status:** unknown (step failed)" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Bundle Version:** N/A" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  deploy:
+    name: Deploy via EnforceAuth
+    needs: dry-run
+    if: needs.dry-run.result == 'success'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy Policy Bundle
+        uses: EnforceAuth/deploy-action@v1
+        with:
+          entity-id: ${{ secrets.EA_ENTITY_ID }}
+          api-url: ${{ vars.EA_API_URL }}
+          environment: production
+          wait-for-completion: true
+          timeout-minutes: 10
