@@ -16,7 +16,7 @@ allow if {
 
 # Allow Rule
 allow_rules contains "1" if {
-	input.resource == "asdf"
+	input.resource == "retail_dashboard"
 }
 
 deny_rules := set()
